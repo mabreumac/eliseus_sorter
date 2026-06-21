@@ -13,6 +13,7 @@ EMBEDDING_DIM = 512
 
 # Production sorting
 UNMATCHED_FOLDER = "_unmatched"
+NO_CLASS_FOLDER = "_no_class"
 SORT_LOG_NAME = "_sort_log.csv"
 CLASS_FOLDER_PREFIX = "class_"
 CLASS_PHOTOS_FOLDER = "_class_photos"
@@ -43,7 +44,7 @@ DEFAULT_SCAN_WORKERS = 1
 # Resize large photos before detection (lower = faster, less accurate on tiny faces)
 MAX_IMAGE_WIDTH = 1024
 
-# Extra folder levels between naming_reference root and student-name folders (0 = direct children)
+# Levels up from each naming-reference photo's folder to the student-name folder
 DEFAULT_NAMING_REFERENCE_SKIP = 0
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}

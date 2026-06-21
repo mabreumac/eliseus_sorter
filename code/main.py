@@ -62,7 +62,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=DEFAULT_NAMING_REFERENCE_SKIP,
         metavar="N",
-        help="Wrapper folder levels between naming ref root and student names (default: %(default)s)",
+        help="Levels up from each reference photo's folder to the student name (default: %(default)s)",
     )
     parser.add_argument(
         "--duplicate-group-photos",

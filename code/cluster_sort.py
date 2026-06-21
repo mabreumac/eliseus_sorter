@@ -20,6 +20,7 @@ from config import (
     DEFAULT_SCAN_WORKERS,
     GROUP_OUTPUT_FOLDER,
     MATCH_TOLERANCE,
+    NO_CLASS_FOLDER,
     SORT_LOG_NAME,
     UNMATCHED_FOLDER,
 )
@@ -677,6 +678,26 @@ def _run_class_sort(
         if cls_label is not None and cluster_index is not None:
             face_assignments[key] = (cls_label, cluster_index, similarity)
 
+    unassigned_faces = [
+        face
+        for face in other_faces
+        if (str(face.image_path.resolve()), face.face_index) not in face_assignments
+    ]
+    no_class_clusterer = FaceClusterer(similarity_threshold=config.tolerance)
+    for index, face in enumerate(unassigned_faces, start=1):
+        if should_cancel and should_cancel():
+            break
+        if on_progress and unassigned_faces:
+            on_progress(
+                "cluster",
+                index,
+                len(unassigned_faces),
+                f"Clustering unassigned face {index}/{len(unassigned_faces)}",
+            )
+        key = (str(face.image_path.resolve()), face.face_index)
+        cluster_index, similarity = no_class_clusterer.assign(face.embedding)
+        face_assignments[key] = (NO_CLASS_FOLDER, cluster_index, similarity)
+
     runtime.cluster_seconds = time.perf_counter() - t_cluster
 
     rename_map = _resolve_person_renames(
@@ -730,6 +751,7 @@ def _run_class_sort(
 
     matched = sum(1 for r in results if is_known_match(r.matched_student))
     num_clusters = sum(bucket.clusterer.num_clusters for bucket in registry.classes)
+    num_clusters += no_class_clusterer.num_clusters
     return SortResult(
         results=results,
         output_dir=config.output_dir,

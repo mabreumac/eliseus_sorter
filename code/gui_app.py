@@ -190,7 +190,7 @@ class EliseusSorterApp(ctk.CTk):
         self.naming_reference_skip_entry.grid(row=0, column=1, sticky="w", padx=(0, 8))
         ctk.CTkLabel(
             naming_skip_row,
-            text="Wrapper folders above student names (0 = names directly inside naming ref)",
+            text="Levels up from each photo's folder to the student name (0 = folder that holds the JPG)",
             font=ctk.CTkFont(size=12),
             text_color=("gray30", "gray70"),
         ).grid(row=0, column=2, sticky="w")

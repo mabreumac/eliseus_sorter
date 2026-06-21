@@ -14,6 +14,7 @@ from config import (
     GROUP_OUTPUT_FOLDER,
     IMAGE_EXTENSIONS,
     MAX_IMAGE_WIDTH,
+    NO_CLASS_FOLDER,
     UNMATCHED_FOLDER,
 )
 from group_photos import is_group_reference_folder
@@ -21,7 +22,7 @@ from group_photos import is_group_reference_folder
 
 def is_sort_output_segment(name: str) -> bool:
     """True if a top-level folder name is produced by the sorter (skip when re-scanning in place)."""
-    if name in (UNMATCHED_FOLDER, CLASS_PHOTOS_FOLDER, GROUP_OUTPUT_FOLDER):
+    if name in (UNMATCHED_FOLDER, NO_CLASS_FOLDER, CLASS_PHOTOS_FOLDER, GROUP_OUTPUT_FOLDER):
         return True
     if name.startswith(CLASS_FOLDER_PREFIX):
         return True
