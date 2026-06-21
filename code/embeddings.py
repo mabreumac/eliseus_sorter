@@ -9,9 +9,25 @@ from typing import Optional
 import cv2
 import numpy as np
 
-from config import MIN_FACE_AREA_RATIO, MIN_FACE_DET_SCORE
+from config import (
+    DEFAULT_FACE_SENSITIVITY,
+    MIN_FACE_AREA_RATIO,
+    MIN_FACE_DET_SCORE,
+    sensitivity_to_face_filters,
+)
 from face_engine import get_face_analysis
 from group_photos import GroupPhotoMode
+
+
+@dataclass(frozen=True)
+class FaceFilterParams:
+    min_det_score: float = MIN_FACE_DET_SCORE
+    min_area_ratio: float = MIN_FACE_AREA_RATIO
+
+    @classmethod
+    def from_sensitivity(cls, sensitivity: int = DEFAULT_FACE_SENSITIVITY) -> "FaceFilterParams":
+        det, area = sensitivity_to_face_filters(sensitivity)
+        return cls(min_det_score=det, min_area_ratio=area)
 
 
 @dataclass(frozen=True)
@@ -47,20 +63,25 @@ def _det_score(face: object) -> float:
     return float(score)
 
 
-def _filter_significant_faces(detected: list) -> list:
+def _filter_significant_faces(
+    detected: list,
+    *,
+    face_filter: FaceFilterParams | None = None,
+) -> list:
     """Keep main-subject faces; drop low-confidence and tiny background detections."""
     if not detected:
         return []
 
+    filt = face_filter or FaceFilterParams()
     max_area = max(_face_area(face.bbox) for face in detected)
     if max_area <= 0:
         return list(detected)
 
     kept: list = []
     for face in detected:
-        if _det_score(face) < MIN_FACE_DET_SCORE:
+        if _det_score(face) < filt.min_det_score:
             continue
-        if MIN_FACE_AREA_RATIO > 0 and _face_area(face.bbox) / max_area < MIN_FACE_AREA_RATIO:
+        if filt.min_area_ratio > 0 and _face_area(face.bbox) / max_area < filt.min_area_ratio:
             continue
         kept.append(face)
     return kept
@@ -104,6 +125,8 @@ def _load_bgr(image_path: Path) -> np.ndarray | None:
 def encode_faces_from_path(
     image_path: Path,
     mode: GroupPhotoMode = GroupPhotoMode.FIRST_FACE,
+    *,
+    face_filter: FaceFilterParams | None = None,
 ) -> MultiFaceEncodingResult:
     """Detect faces and return L2-normalized ArcFace embeddings."""
     image = _load_bgr(image_path)
@@ -118,7 +141,7 @@ def encode_faces_from_path(
     if not detected:
         return MultiFaceEncodingResult(num_faces=0)
 
-    detected = _filter_significant_faces(detected)
+    detected = _filter_significant_faces(detected, face_filter=face_filter)
     if not detected:
         return MultiFaceEncodingResult(num_faces=0)
 

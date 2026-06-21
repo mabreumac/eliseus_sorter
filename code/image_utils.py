@@ -15,6 +15,7 @@ from config import (
     IMAGE_EXTENSIONS,
     MAX_IMAGE_WIDTH,
     NO_CLASS_FOLDER,
+    SORT_RUN_FOLDER_SUFFIX,
     UNMATCHED_FOLDER,
 )
 from group_photos import is_group_reference_folder
@@ -29,6 +30,8 @@ def is_sort_output_segment(name: str) -> bool:
     if name.startswith("Person_"):
         return True
     if name.startswith("run_"):
+        return True
+    if name.endswith(SORT_RUN_FOLDER_SUFFIX):
         return True
     return False
 
@@ -96,28 +99,28 @@ def iter_test_subset_images(directory: Path) -> Generator[Path, None, None]:
 
 def iter_images_recursive(directory: Path) -> Generator[Path, None, None]:
     """All images under directory (any depth), sorted by path."""
-    yield from iter_sort_input_images(directory, recursive=True, in_place=False)
+    yield from iter_sort_input_images(directory, recursive=True, skip_sort_outputs=False)
 
 
 def iter_sort_input_images(
     directory: Path,
     *,
     recursive: bool = True,
-    in_place: bool = False,
+    skip_sort_outputs: bool = False,
 ) -> Generator[Path, None, None]:
-    """Images to scan for sorting; skips existing sort output folders when in_place."""
+    """Images to scan for sorting; skips existing sort output folders when requested."""
     if not directory.is_dir():
         return
     if recursive:
         for path in sorted(directory.rglob("*")):
             if not is_image_file(path):
                 continue
-            if in_place and _skip_in_place_input(path, directory):
+            if skip_sort_outputs and _skip_in_place_input(path, directory):
                 continue
             yield path
     else:
         for path in iter_image_files(directory):
-            if in_place and _skip_in_place_input(path, directory):
+            if skip_sort_outputs and _skip_in_place_input(path, directory):
                 continue
             yield path
 

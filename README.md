@@ -64,18 +64,20 @@ Logs: **`logs/install.log`**
 4. **Ref folder skip** — folder levels **up** from each reference photo to the identity label  
 5. **Group if faces >** — photos with more faces than this define a roster group (default: 5)  
 6. **Duplicate group photos** — also copy multi-face images into each matched person folder  
-7. **Scan workers** — parallel inference (`1` = safest; `2–4` = faster, more RAM)  
-8. **Acceleration** — `Auto` prefers CoreML on Apple Silicon  
-9. **Sort photos**
+7. **Scan workers** — parallel inference (`1` = safest; up to `8` or custom; more RAM per worker)  
+8. **Background faces** — slider to ignore distant/bokeh detections (strict ← → permissive)  
+9. **Move files** — relocate instead of copy (unchecked = copy)  
+10. **Acceleration** — `Auto` prefers CoreML on Apple Silicon  
+11. **Sort photos**
 
 Progress shows scan, cluster, naming, and copy phases plus memory, CPU, and elapsed time.
 
 ### Input / output behavior
 
-- **Separate input and output** — originals are **copied**; input folder unchanged.  
-- **Same folder (in-place)** — files are **moved** into subfolders; duplicate copies only when one file must appear in multiple destinations.
-
-Immediate subfolders under **Input** each become a separate run: `run_<name>/` under **Output**.
+- **Copy** (default) — originals stay in the input folder; sorted photos go to output.  
+- **Move** — matched photos are relocated; source folders may be left empty. Extra copies still apply when one file must appear in multiple destinations (e.g. group photos).  
+- **Nested input** — all images under every subfolder are treated as **one pool**. When input contains subfolders, output is written to `YYYYMMDD_HHMMSS_eliseus_sorter/` under your chosen output folder.  
+- Use the **Move files** checkbox in the app (or `--move` in the CLI) instead of inferring behavior from paths.
 
 ---
 
@@ -129,14 +131,14 @@ output/
 |---------|----------------|
 | **Acceleration → Auto** | Best on Apple Silicon (CoreML) |
 | **Scan workers → 1** | Safest with GPU acceleration |
-| **Scan workers → 2** | Good on 16 GB systems |
+| **Scan workers → 2–8** | Good on 16 GB+ systems; custom for higher counts |
 
 Tune defaults in `code/config.py`, then rebuild with **`installer.command`** or **`bash code/build_mac_app.sh`**.
 
 | Constant | Default | Effect |
 |----------|---------|--------|
-| `MIN_FACE_AREA_RATIO` | `0.12` | Ignore tiny background detections |
-| `MIN_FACE_DET_SCORE` | `0.45` | Minimum detector confidence |
+| `MIN_FACE_AREA_RATIO` | `0.12` | Ignore tiny background detections (or use GUI slider) |
+| `MIN_FACE_DET_SCORE` | `0.45` | Minimum detector confidence (linked to slider) |
 | `MAX_IMAGE_WIDTH` | `1024` | Pre-scale before inference |
 | `MATCH_TOLERANCE` | `0.4` | Minimum cosine similarity to merge identities |
 

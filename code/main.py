@@ -16,10 +16,18 @@ from pathlib import Path
 if __name__ == "__main__" and __package__ is None:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import DEFAULT_INFERENCE_DEVICE, DEFAULT_MIN_CLASS_FACES, DEFAULT_NAMING_REFERENCE_SKIP, DEFAULT_SCAN_WORKERS, GROUP_OUTPUT_FOLDER, MATCH_TOLERANCE
+from config import (
+    DEFAULT_FACE_SENSITIVITY,
+    DEFAULT_INFERENCE_DEVICE,
+    DEFAULT_MIN_CLASS_FACES,
+    DEFAULT_NAMING_REFERENCE_SKIP,
+    DEFAULT_SCAN_WORKERS,
+    GROUP_OUTPUT_FOLDER,
+    MATCH_TOLERANCE,
+)
 from face_engine import configure_inference_device
 from group_photos import GroupPhotoSettings
-from production import BatchSortResult, SortConfig, run_sort
+from production import SortConfig, run_sort
 from reporting import format_result_line
 
 
@@ -69,13 +77,30 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Also copy group photos into each matched person folder (default: group folder only)",
     )
+    transfer = parser.add_mutually_exclusive_group()
+    transfer.add_argument(
+        "--move",
+        action="store_true",
+        help="Move matched photos into output (default: copy)",
+    )
+    transfer.add_argument(
+        "--copy",
+        action="store_true",
+        help="Copy matched photos into output (default)",
+    )
     parser.add_argument(
         "--scan-workers",
         type=int,
         default=DEFAULT_SCAN_WORKERS,
-        choices=[1, 2, 3, 4],
         metavar="N",
-        help="Parallel face-scan processes (1=safe, 2–4=faster, more RAM; default: %(default)s)",
+        help="Parallel face-scan processes (1=safe, higher=faster, more RAM; default: %(default)s)",
+    )
+    parser.add_argument(
+        "--face-sensitivity",
+        type=int,
+        default=DEFAULT_FACE_SENSITIVITY,
+        metavar="0-100",
+        help="Background face sensitivity: 0=strict, 100=permissive (default: %(default)s)",
     )
     parser.add_argument(
         "--inference-device",
@@ -109,7 +134,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     _configure_logging(args.verbose)
 
+    if args.scan_workers < 1:
+        print("ERROR: --scan-workers must be at least 1", file=sys.stderr)
+        return 2
+
     configure_inference_device(args.inference_device)
+
+    move_files = bool(args.move)
 
     config = SortConfig(
         input_dir=args.input,
@@ -120,18 +151,15 @@ def main(argv: list[str] | None = None) -> int:
         naming_reference_skip=args.naming_reference_skip,
         duplicate_group_photos=args.duplicate_group_photos,
         scan_workers=args.scan_workers,
+        move_files=move_files,
+        face_sensitivity=max(0, min(100, args.face_sensitivity)),
         group_settings=GroupPhotoSettings(
             group_output_folder=GROUP_OUTPUT_FOLDER,
         ),
     )
 
     outcome = run_sort(config)
-    if isinstance(outcome, BatchSortResult):
-        print(f"\n{len(outcome.runs)} run(s) under: {outcome.output_dir}")
-        for run in outcome.runs:
-            _print_result(run)
-    else:
-        _print_result(outcome)
+    _print_result(outcome)
     return 0
 
 

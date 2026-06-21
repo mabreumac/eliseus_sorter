@@ -18,5 +18,5 @@ __all__ = [
 ]
 
 
-def run_sort(*args, **kwargs) -> SortResult | BatchSortResult:
+def run_sort(*args, **kwargs) -> SortResult:
     return run_batch_sort(*args, **kwargs)

@@ -51,7 +51,9 @@ Common flags:
 | Flag | Description |
 |------|-------------|
 | `--naming-reference-skip N` | Levels up from each reference photo's folder to the student name |
-| `--scan-workers 1–4` | Parallel face scanning |
+| `--scan-workers 1–8+` | Parallel face scanning |
+| `--move` | Move files instead of copy |
+| `--face-sensitivity 0-100` | Background face strictness |
 | `--inference-device auto\|cpu\|coreml\|cuda` | Inference backend |
 | `--duplicate-group-photos` | Also copy group photos into person folders |
 | `--flat` | `Person_001` at output root (no class photo required) |

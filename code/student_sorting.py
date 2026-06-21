@@ -74,11 +74,11 @@ def apply_production_sorting(
     results: list[MatchResult],
     output_root: Path,
     *,
-    in_place: bool = False,
+    move_files: bool = False,
 ) -> list[MatchResult]:
     """Place every match into output_root/<student>/ or output_root/_unmatched/.
 
-    When in_place is True, the first destination for each source file is moved;
+    When move_files is True, the first destination for each source file is moved;
     additional destinations (e.g. group photo into several person folders) are copied.
     """
     output_root.mkdir(parents=True, exist_ok=True)
@@ -100,7 +100,7 @@ def apply_production_sorting(
             move = False
         else:
             source = Path(result.test_path)
-            move = in_place
+            move = move_files
 
         dest = transfer_match_to_student_folder(
             source,

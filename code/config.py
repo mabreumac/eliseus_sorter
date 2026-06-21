@@ -46,6 +46,23 @@ DEFAULT_SCAN_WORKERS = 1
 MIN_FACE_DET_SCORE = 0.45
 MIN_FACE_AREA_RATIO = 0.12
 
+# GUI slider 0 (strict) … 100 (permissive); 50 ≈ defaults above.
+DEFAULT_FACE_SENSITIVITY = 50
+
+# Default file transfer mode (GUI checkbox overrides).
+DEFAULT_MOVE_FILES = False
+
+# Timestamped run folder suffix when input contains subfolders.
+SORT_RUN_FOLDER_SUFFIX = "_eliseus_sorter"
+
+
+def sensitivity_to_face_filters(sensitivity: int) -> tuple[float, float]:
+    """Map 0–100 sensitivity to (min_det_score, min_area_ratio)."""
+    t = max(0, min(100, sensitivity)) / 100.0
+    min_area_ratio = max(0.0, 0.25 - t * 0.20)
+    min_det_score = max(0.25, 0.55 - t * 0.20)
+    return min_det_score, min_area_ratio
+
 # Resize large photos before detection (lower = faster, less accurate on tiny faces)
 MAX_IMAGE_WIDTH = 1024
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -15,16 +16,19 @@ from class_registry import ClassRegistry
 from clustering import FaceClusterer, person_id_label
 from config import (
     CLASS_PHOTOS_FOLDER,
+    DEFAULT_FACE_SENSITIVITY,
     DEFAULT_MIN_CLASS_FACES,
+    DEFAULT_MOVE_FILES,
     DEFAULT_NAMING_REFERENCE_SKIP,
     DEFAULT_SCAN_WORKERS,
     GROUP_OUTPUT_FOLDER,
     MATCH_TOLERANCE,
     NO_CLASS_FOLDER,
     SORT_LOG_NAME,
+    SORT_RUN_FOLDER_SUFFIX,
     UNMATCHED_FOLDER,
 )
-from embeddings import encode_faces_from_path
+from embeddings import FaceFilterParams, encode_faces_from_path
 from face_scan import scan_all_images
 from group_photos import GroupPhotoMode, GroupPhotoSettings
 from image_utils import iter_sort_input_images
@@ -67,14 +71,22 @@ class SortConfig:
     naming_reference_skip: int = DEFAULT_NAMING_REFERENCE_SKIP
     duplicate_group_photos: bool = False
     scan_workers: int = DEFAULT_SCAN_WORKERS
+    move_files: bool = DEFAULT_MOVE_FILES
+    face_sensitivity: int = DEFAULT_FACE_SENSITIVITY
 
-    def in_place_sort(self) -> bool:
+    def face_filter(self) -> FaceFilterParams:
+        return FaceFilterParams.from_sensitivity(self.face_sensitivity)
+
+    def skip_sort_outputs_when_scanning(self, effective_output: Path) -> bool:
+        """Skip prior sort folders under input when output overlaps the input tree."""
         try:
-            return (
-                self.input_dir.expanduser().resolve()
-                == self.output_dir.expanduser().resolve()
-            )
-        except OSError:
+            inp = self.input_dir.expanduser().resolve()
+            out = effective_output.expanduser().resolve()
+            if inp == out:
+                return True
+            out.relative_to(inp)
+            return True
+        except (OSError, ValueError):
             return False
 
 
@@ -97,24 +109,45 @@ class BatchSortResult:
     output_dir: Path
 
 
+def input_has_subfolders(input_dir: Path) -> bool:
+    """True when input contains at least one subdirectory (nested batch layout)."""
+    if not input_dir.is_dir():
+        return False
+    return any(path.is_dir() for path in input_dir.iterdir())
+
+
+def resolve_sort_output_dir(input_dir: Path, output_dir: Path) -> Path:
+    """When input has subfolders, write into a timestamped run folder under output."""
+    base = output_dir.expanduser().resolve()
+    if input_has_subfolders(input_dir):
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return base / f"{stamp}{SORT_RUN_FOLDER_SUFFIX}"
+    return base
+
+
 def discover_input_runs(input_dir: Path) -> list[tuple[str, Path]]:
-    """If input has immediate subfolders, each becomes an independent run."""
+    """Deprecated: sorting now treats the full input tree as one pool."""
     if not input_dir.is_dir():
         raise ValueError(f"Input folder does not exist: {input_dir}")
-    subdirs = sorted(p for p in input_dir.iterdir() if p.is_dir())
-    if subdirs:
-        return [(child.name, child) for child in subdirs]
     return [("", input_dir)]
 
 
-def _iter_images(config: SortConfig) -> list[Path]:
-    in_place = config.in_place_sort()
+def _iter_images(config: SortConfig, effective_output: Path) -> list[Path]:
+    skip_outputs = config.skip_sort_outputs_when_scanning(effective_output)
     if config.recursive:
         return list(
-            iter_sort_input_images(config.input_dir, recursive=True, in_place=in_place)
+            iter_sort_input_images(
+                config.input_dir,
+                recursive=True,
+                skip_sort_outputs=skip_outputs,
+            )
         )
     return list(
-        iter_sort_input_images(config.input_dir, recursive=False, in_place=in_place)
+        iter_sort_input_images(
+            config.input_dir,
+            recursive=False,
+            skip_sort_outputs=skip_outputs,
+        )
     )
 
 
@@ -162,6 +195,7 @@ def _scan_all_faces(
     runtime: SortRuntime,
     *,
     scan_workers: int = DEFAULT_SCAN_WORKERS,
+    face_filter: FaceFilterParams | None = None,
     on_progress: Optional[ProgressCallback] = None,
     should_cancel: Optional[CancelCallback] = None,
 ) -> list[tuple[Path, list[DetectedFace], Optional[str]]]:
@@ -169,6 +203,7 @@ def _scan_all_faces(
         image_paths,
         encoding_mode,
         workers=scan_workers,
+        face_filter=face_filter,
         on_progress=on_progress,
         should_cancel=should_cancel,
     )
@@ -246,9 +281,14 @@ def _resolve_person_renames(
         ref_path,
         skip_levels=config.naming_reference_skip,
         workers=config.scan_workers,
+        face_filter=config.face_filter(),
         on_progress=on_progress,
         should_cancel=should_cancel,
     )
+    if index.loaded_from_cache:
+        logger.info("Naming reference loaded from cache (%d identities)", len(index.references))
+    for warning in index.duplicate_name_warnings:
+        logger.warning(warning)
     return build_person_rename_map(
         cluster_embeddings,
         index,
@@ -515,7 +555,7 @@ def _run_flat_sort(
 ) -> SortResult:
     settings = config.group_settings
     encoding_mode = _encoding_mode_for_clustering(settings)
-    image_paths = _iter_images(config)
+    image_paths = _iter_images(config, config.output_dir)
     total = len(image_paths)
     if total == 0:
         raise ValueError(f"No images found in {config.input_dir}")
@@ -527,6 +567,7 @@ def _run_flat_sort(
         encoding_mode,
         runtime,
         scan_workers=config.scan_workers,
+        face_filter=config.face_filter(),
         on_progress=on_progress,
         should_cancel=should_cancel,
     )
@@ -580,7 +621,7 @@ def _run_flat_sort(
     results = apply_production_sorting(
         raw_results,
         config.output_dir,
-        in_place=config.in_place_sort(),
+        move_files=config.move_files,
     )
     runtime.copy_seconds = time.perf_counter() - t_copy
 
@@ -613,7 +654,7 @@ def _run_class_sort(
     min_class_faces = config.min_class_faces
     settings = config.group_settings
     encoding_mode = _encoding_mode_for_clustering(settings)
-    image_paths = _iter_images(config)
+    image_paths = _iter_images(config, config.output_dir)
     total = len(image_paths)
     if total == 0:
         raise ValueError(f"No images found in {config.input_dir}")
@@ -625,6 +666,7 @@ def _run_class_sort(
         encoding_mode,
         runtime,
         scan_workers=config.scan_workers,
+        face_filter=config.face_filter(),
         on_progress=on_progress,
         should_cancel=should_cancel,
     )
@@ -740,7 +782,7 @@ def _run_class_sort(
     results = apply_production_sorting(
         raw_results,
         config.output_dir,
-        in_place=config.in_place_sort(),
+        move_files=config.move_files,
     )
     runtime.copy_seconds = time.perf_counter() - t_copy
 
@@ -781,31 +823,8 @@ def run_batch_sort(
     config: SortConfig,
     on_progress: Optional[ProgressCallback] = None,
     should_cancel: Optional[CancelCallback] = None,
-) -> BatchSortResult | SortResult:
-    """Run one or more independent sorts when input contains subfolders."""
-    runs = discover_input_runs(config.input_dir)
-    if len(runs) == 1 and runs[0][0] == "":
-        return run_cluster_sort(config, on_progress, should_cancel)
-
-    config.output_dir.mkdir(parents=True, exist_ok=True)
-    results: list[SortResult] = []
-    for run_index, (name, input_path) in enumerate(runs, start=1):
-        if should_cancel and should_cancel():
-            break
-        run_output = config.output_dir / f"run_{name}"
-        run_config = replace(config, input_dir=input_path, output_dir=run_output)
-
-        def run_progress(phase: str, current: int, total: int, message: str) -> None:
-            if on_progress:
-                on_progress(
-                    phase,
-                    current,
-                    total,
-                    f"[{name}] {message} ({run_index}/{len(runs)})",
-                )
-
-        results.append(
-            run_cluster_sort(run_config, on_progress=run_progress, should_cancel=should_cancel)
-        )
-
-    return BatchSortResult(runs=results, output_dir=config.output_dir)
+) -> SortResult:
+    """Sort all images under input as one pool into the resolved output folder."""
+    effective_output = resolve_sort_output_dir(config.input_dir, config.output_dir)
+    effective_config = replace(config, output_dir=effective_output)
+    return run_cluster_sort(effective_config, on_progress, should_cancel)
