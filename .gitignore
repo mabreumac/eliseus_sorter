@@ -1,0 +1,34 @@
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# --- Anonymity: never commit student data or identifiers ---
+
+# Entire local data tree (folder names, photos, DB, reports)
+data/*/*
+
+# Photos / media anywhere in the repo
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.bmp
+*.tif
+*.tiff
+*.heic
+*.raw
+*.dng
+
+# Databases and embedding cache
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated match reports (if saved outside data/)
+match_report_*.json
+match_report_*.csv
+
+# Local env / secrets
+.env
+.env.*

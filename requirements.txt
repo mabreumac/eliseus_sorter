@@ -1,0 +1,8 @@
+# Installed by scripts/install.sh before face_recognition (kept here for reference).
+# dlib>=19.24.0
+
+face_recognition>=1.3.0
+numpy>=1.24.0
+pandas>=2.0.0
+Pillow>=10.0.0
+customtkinter>=5.2.0
