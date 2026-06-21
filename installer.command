@@ -1,5 +1,5 @@
 #!/bin/bash
-# Double-click to install Eliseus Sorter.app to ~/Applications.
+# Double-click to install Eliseus Sorter — one step: dependencies + app.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -16,21 +16,36 @@ xattr -cr "${ROOT}" 2>/dev/null || true
 source "${ROOT}/macos/branding.sh"
 # shellcheck source=macos/install_banner.sh
 source "${ROOT}/macos/install_banner.sh"
+# shellcheck source=code/paths.sh
+source "${ROOT}/code/paths.sh"
 
 clear
 print_banner "Install Eliseus Sorter"
-echo "  Installs to ~/Applications"
-echo "  First launch installs Python libraries (~10–15 min, one time)"
+echo "  One step: Python libraries + app to ~/Applications"
+echo "  Takes about 10–15 minutes (internet required)"
 echo "  Photos stay on your Mac — nothing is uploaded"
+echo "  Logs: ${LOG_DIR}/install.log"
 echo ""
 
-bash "${ROOT}/code/build_mac_app.sh"
-APP_DEST="${HOME}/Applications/${APP_NAME}.app"
+if ! /usr/bin/osascript -e 'display dialog "Install Eliseus Sorter now?\n\nThis will install Homebrew and Python if needed, then all libraries and the app (~10–15 min, internet required)." buttons {"Cancel", "Install"} default button "Install" with title "Eliseus Sorter"' >/dev/null 2>&1; then
+  echo "Installation cancelled."
+  exit 1
+fi
 
-# shellcheck source=code/paths.sh
-source "${ROOT}/code/paths.sh"
 register_repo_root "${ROOT}"
-echo "  Logs: ${LOG_DIR}"
+mkdir -p "${LOG_DIR}"
+
+echo ""
+echo "▸ Step 1/2 — Python environment and libraries"
+echo ""
+bash "${ROOT}/code/install.sh"
+
+echo ""
+echo "▸ Step 2/2 — Building Eliseus Sorter.app"
+echo ""
+bash "${ROOT}/code/build_mac_app.sh"
+
+APP_DEST="${HOME}/Applications/${APP_NAME}.app"
 
 if [[ ! -d "${APP_DEST}" ]]; then
   echo "Build failed — app not found in Applications." >&2
@@ -43,11 +58,12 @@ if [[ -d "${ROOT}/dist" ]]; then
 fi
 
 echo ""
-echo "Done."
+echo "Done — everything is installed."
 echo ""
-echo "  Open from Spotlight or Finder → Applications"
-echo "  First launch: click Install when prompted"
+echo "  Open Eliseus Sorter from Spotlight or Applications"
+echo "  No extra setup on first launch"
 echo ""
 echo "  If macOS blocks the app: right-click → Open → Open"
+echo "  Logs: ${LOG_DIR}/"
 echo ""
 read -r -p "Press Enter to close… " _

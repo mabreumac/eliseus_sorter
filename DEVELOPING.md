@@ -2,10 +2,14 @@
 
 ## Setup
 
+Run **`installer.command`** once from the project folder (installs everything).
+
+For development without rebuilding the app:
+
 ```bash
-bash code/install.sh
+bash code/install.sh          # Python env only
 pip install -r requirements-dev.txt   # adds matplotlib for benchmarks
-bash code/launch.sh
+bash code/launch.sh --local
 ```
 
 ## Benchmark (optional)
@@ -20,10 +24,11 @@ Reports go to `results/`. Test data lives in `data/benchmark/` (not shipped with
 ## Build & install the Mac app
 
 ```bash
-bash code/build_mac_app.sh   # installs to ~/Applications
+bash code/install.sh           # dependencies only (if already run via installer.command)
+bash code/build_mac_app.sh     # installs to ~/Applications
 ```
 
-Or double-click **`installer.command`**. The app installs to **~/Applications** only.
+Or double-click **`installer.command`** to do both in one step.
 
 The app bundle excludes benchmark and dev-only scripts.
 

@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# One-time setup: virtual environment + Python dependencies (macOS).
+# One-time setup: Homebrew (if needed), Python 3.10+, venv, and all pip packages.
 set -euo pipefail
+
+unset ELISEUS_SORTER_APP ELISEUS_PROJECT_ROOT || true
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=paths.sh
 source "${SCRIPT_DIR}/paths.sh"
 LOG_FILE="${INSTALL_LOG}"
 PYTHON="${PYTHON:-}"
+VERIFY_SCRIPT="${SCRIPT_DIR}/verify_install.py"
 
 mkdir -p "${LOG_DIR}"
 register_repo_root "${REPO_ROOT}"
@@ -18,12 +21,12 @@ fail()  { printf '\n\033[1;31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
 
 exec > >(tee -a "${LOG_FILE}") 2>&1
 
-cd "${PROJECT_ROOT}"
+cd "${REPO_ROOT}"
 
 # shellcheck source=../macos/branding.sh
-source "${PROJECT_ROOT}/macos/branding.sh"
+source "${REPO_ROOT}/macos/branding.sh"
 # shellcheck source=../macos/install_banner.sh
-source "${PROJECT_ROOT}/macos/install_banner.sh"
+source "${REPO_ROOT}/macos/install_banner.sh"
 
 python_version_ok() {
   local exe="$1"
@@ -34,6 +37,25 @@ python_version_ok() {
 python_version_label() {
   local exe="$1"
   "${exe}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'
+}
+
+ensure_homebrew() {
+  brew_shellenv
+  if command -v brew >/dev/null 2>&1; then
+    ok "Homebrew ready"
+    return 0
+  fi
+
+  info "Installing Homebrew"
+  echo "  Your Mac may ask for your password once (required by Homebrew)."
+  echo "  This can take a few minutes."
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  brew_shellenv
+
+  if ! command -v brew >/dev/null 2>&1; then
+    fail "Homebrew installation did not finish. Run installer.command again after installing Homebrew from https://brew.sh"
+  fi
+  ok "Homebrew installed"
 }
 
 find_suitable_python() {
@@ -51,6 +73,9 @@ find_suitable_python() {
     python3.12 python3.11 python3.10
     /opt/homebrew/bin/python3.12 /opt/homebrew/bin/python3.11 /opt/homebrew/bin/python3.10
     /usr/local/bin/python3.12 /usr/local/bin/python3.11 /usr/local/bin/python3.10
+    /Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12
+    /Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11
+    /Library/Frameworks/Python.framework/Versions/3.10/bin/python3.10
     python3
   )
 
@@ -65,14 +90,11 @@ find_suitable_python() {
 }
 
 install_python_with_homebrew() {
-  if ! command -v brew >/dev/null 2>&1; then
-    return 1
-  fi
+  ensure_homebrew
 
-  info "Installing Python 3.12 with Homebrew (one-time)"
-  echo "  macOS ships with Python 3.9, which is too old for this app."
-  echo "  This step downloads a newer Python — it may take a few minutes."
-  brew install python@3.12
+  info "Installing Python 3.12 and Tkinter with Homebrew"
+  echo "  macOS system Python is too old for this app."
+  brew install python@3.12 python-tk@3.12
 
   local brew_python
   brew_python="$(brew --prefix python@3.12)/bin/python3.12"
@@ -91,7 +113,7 @@ resolve_python() {
     return 0
   fi
 
-  warn "Python 3.10+ not found on this Mac."
+  warn "Python 3.10+ not found — installing with Homebrew."
   if found="$(install_python_with_homebrew)"; then
     echo "${found}"
     return 0
@@ -102,62 +124,56 @@ resolve_python() {
     system_version="$(python_version_label python3)"
   fi
 
-  fail "Python 3.10 or newer is required (your python3 is ${system_version}).
+  fail "Could not install Python 3.10+ (system python3 is ${system_version}).
 
-Easiest fix — install Homebrew, then run Install again:
-  https://brew.sh
+Try running installer.command again, or install Python 3.12 from:
+  https://www.python.org/downloads/macos/
 
-Or install Python manually:
-  1. Open https://www.python.org/downloads/macos/
-  2. Download Python 3.12 (or newer)
-  3. Run the installer
-  4. Run  bash code/install.sh  again
-
-Advanced (if Homebrew is already installed):
-  brew install python@3.12
-  bash code/install.sh"
+Then run: bash installer.command"
 }
 
-info "${APP_NAME} — one-time setup"
+info "${APP_NAME} — full setup"
 print_banner "Setup"
-echo "  Project folder: ${PROJECT_ROOT}"
+echo "  Project folder: ${REPO_ROOT}"
 echo "  Log file:       ${LOG_FILE}"
+echo "  Python env:     ${VENV_DIR}"
+
+ensure_homebrew
+
+if ! xcode-select -p >/dev/null 2>&1; then
+  warn "Xcode Command Line Tools are required."
+  echo "  Click Install in the macOS dialog, wait for it to finish,"
+  echo "  then run installer.command again."
+  xcode-select --install 2>/dev/null || true
+  fail "Install Command Line Tools, then re-run installer.command."
+fi
+ok "Xcode Command Line Tools"
 
 PYTHON="$(resolve_python)"
 PY_VERSION="$(python_version_label "${PYTHON}")"
 ok "Python ${PY_VERSION} (${PYTHON})"
 
-if ! xcode-select -p >/dev/null 2>&1; then
-  warn "Xcode Command Line Tools are not installed yet."
-  echo "  A system dialog may appear — click Install and wait for it to finish."
-  echo "  Then run this installer again."
-  xcode-select --install 2>/dev/null || true
-  fail "Please install Command Line Tools, then re-run Install."
-fi
-ok "Xcode Command Line Tools"
-
-if [[ "${PROJECT_ROOT}" == *"CloudStorage"* ]] || [[ "${PROJECT_ROOT}" == *"Google Drive"* ]]; then
-  warn "Project is on Google Drive."
-  echo "  Python packages will be stored locally at: ${VENV_DIR}"
-  if [[ -d "${PROJECT_ROOT}/.venv" ]]; then
-    warn "Removing old .venv inside Google Drive (causes install errors)."
-    rm -rf "${PROJECT_ROOT}/.venv"
+if [[ "${REPO_ROOT}" == *"CloudStorage"* ]] || [[ "${REPO_ROOT}" == *"Google Drive"* ]]; then
+  warn "Project is on Google Drive — Python packages stay in Application Support."
+  if [[ -d "${REPO_ROOT}/.venv" ]]; then
+    warn "Removing old .venv inside Google Drive."
+    rm -rf "${REPO_ROOT}/.venv"
   fi
 fi
 
 info "Creating virtual environment"
 if [[ -d "${VENV_DIR}" ]]; then
   if ! "${VENV_DIR}/bin/python" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
-    warn "Removing old .venv (built with Python < 3.10)"
+    warn "Removing old venv (Python < 3.10)"
     rm -rf "${VENV_DIR}"
   fi
 fi
 
 if [[ ! -d "${VENV_DIR}" ]]; then
   "${PYTHON}" -m venv --copies "${VENV_DIR}"
-  ok "Created .venv with Python ${PY_VERSION}"
+  ok "Created venv with Python ${PY_VERSION}"
 else
-  ok "Using existing .venv"
+  ok "Using existing venv"
 fi
 
 # shellcheck source=/dev/null
@@ -171,56 +187,40 @@ ensure_tkinter() {
     return 0
   fi
 
-  warn "Tkinter is missing — required for the desktop window."
+  warn "Tkinter missing — installing via Homebrew."
   local py_mm
   py_mm="$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 
-  if command -v brew >/dev/null 2>&1; then
-    echo "  Installing python-tk@${py_mm} via Homebrew…"
-    if brew install "python-tk@${py_mm}"; then
-      if python -c "import tkinter" 2>/dev/null; then
-        ok "Tkinter installed"
-        return 0
-      fi
-    fi
+  ensure_homebrew
+  brew install "python-tk@${py_mm}" || true
+  if python -c "import tkinter" 2>/dev/null; then
+    ok "Tkinter installed"
+    return 0
   fi
 
   fail "Tkinter is not available for Python ${py_mm}.
 
-Homebrew Python needs a separate Tk package. In Terminal, run:
-  brew install python-tk@${py_mm}
-
-Then run: bash code/install.sh
-
-Or install Python from https://www.python.org/downloads/macos/ (includes Tk)
-and run  bash code/install.sh  again."
+Re-run installer.command, or install Python from https://www.python.org/downloads/macos/ (includes Tk)."
 }
 
 ensure_tkinter
 
-install_insightface() {
-  info "Installing InsightFace stack (ONNX models download on first run)"
-
-  if python -c "import insightface, onnxruntime, cv2" 2>/dev/null; then
-    ok "InsightFace packages present"
-  fi
-}
-
-install_insightface
-
-info "Installing remaining packages"
-python -m pip install -r "${PROJECT_ROOT}/requirements.txt"
+info "Installing Python packages (numpy, opencv, insightface, GUI…)"
+if [[ ! -f "${REQUIREMENTS_FILE}" ]]; then
+  fail "requirements.txt not found at ${REQUIREMENTS_FILE}"
+fi
+python -m pip install -r "${REQUIREMENTS_FILE}"
 ok "Python packages installed"
 
 info "Verifying installation"
-if ! python "${PROJECT_ROOT}/code/verify_install.py"; then
-  fail "Installation verification failed. See ${LOG_FILE}"
+if ! python "${VERIFY_SCRIPT}"; then
+  fail "Verification failed. See ${LOG_FILE}"
 fi
 ok "Verification passed"
 
 cat <<EOF
 
-$(printf '\033[1;32mInstallation complete!\033[0m')
+$(printf '\033[1;32mSetup complete!\033[0m')
 
 Python environment: ${VENV_DIR}
 Log saved to: ${LOG_FILE}

@@ -19,8 +19,7 @@ cd "${SCRIPT_DIR}"
 if [[ ! -d "${VENV_DIR}" ]]; then
   echo ""
   echo "Setup is not complete."
-  echo "Open Eliseus Sorter from Applications — first launch runs setup automatically."
-  echo "Or from this project folder: bash code/install.sh"
+  echo "Run installer.command from the project folder (one step — installs everything)."
   echo ""
   exit 1
 fi
@@ -44,8 +43,8 @@ fi
 if ! python "${SCRIPT_DIR}/verify_runtime.py"; then
   echo ""
   echo "Installation verification failed."
-  echo "Run: bash code/install.sh"
-  echo "Details: logs/install.log in the project folder"
+  echo "Re-run: bash installer.command"
+  echo "Details: logs/install.log"
   echo ""
   exit 1
 fi

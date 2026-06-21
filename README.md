@@ -18,22 +18,29 @@ bash installer.command
 
 Or double-click **`installer.command`** in Finder.
 
-This builds the app and installs it to **`~/Applications/Eliseus Sorter.app`**.
+This **one step** installs Homebrew and Python if needed, all libraries (numpy, InsightFace, GUI, etc.), and copies the app to **`~/Applications/Eliseus Sorter.app`**. Takes about 10–15 minutes (internet required).
 
-Open the app from **Applications** or Spotlight. The first time you launch it, click **Install** when asked — this downloads Python libraries once (~10–15 minutes, internet required).
+Open the app from **Applications** or Spotlight — **no second setup** on first launch.
 
 If macOS blocks the app: **right-click → Open → Open**.
+
+### What the installer may ask
+
+| Prompt | Action |
+|--------|--------|
+| **Install Eliseus Sorter now?** | Click **Install** (default) |
+| **Mac password** | Required once for Homebrew (if not already installed) |
+| **Xcode Command Line Tools** | Click **Install** in the Apple dialog; then run `installer.command` again |
+
+Logs: **`logs/install.log`** in the project folder.
 
 ### Requirements
 
 | Requirement | Notes |
 |-------------|--------|
 | macOS 12+ | Apple Silicon or Intel |
-| Internet | First launch (pip) and first sort (face models, ~100 MB) |
-| Python 3.10+ | Installed automatically on first launch if Homebrew or python.org Python is available |
-| Xcode Command Line Tools | macOS may prompt you to install these |
-
-On a very fresh Mac with no Homebrew and no Python 3.10+, install [Python 3.12 from python.org](https://www.python.org/downloads/macos/) and open the app again.
+| Internet | Required for the installer |
+| ~2 GB free disk | Python packages and face models |
 
 ---
 
@@ -106,8 +113,8 @@ With **Duplicate group photos** unchecked (default), multi-face photos go only t
 | Issue | Fix |
 |-------|-----|
 | App won’t open | Right-click → **Open** → **Open**; see **`logs/app.log`** in the project folder |
-| Setup failed | See **`logs/install.log`** in the project folder |
-| Missing Python / Tkinter | Install Python 3.12 from python.org, or run `brew install python@3.12 python-tk@3.12` and open the app again |
+| Setup failed | See **`logs/install.log`** — then re-run **`installer.command`** |
+| Missing numpy / packages | Re-run **`installer.command`** (reinstalls the full environment) |
 | Slow first sort | Normal — face models download once (~100 MB) |
 | Wrong student names | Check naming ref layout and **Ref folder skip** |
 

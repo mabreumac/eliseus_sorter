@@ -24,20 +24,17 @@ show_failure() {
 }
 
 if [[ ! -x "${VENV}/bin/python" ]]; then
-  /usr/bin/osascript -e 'display dialog "Eliseus Sorter needs a one-time setup (about 10–15 minutes, internet required). Photos stay on this Mac." buttons {"Cancel", "Install"} default button "Install" with title "Eliseus Sorter — Setup"' || exit 1
-  /bin/bash "${RESOURCES}/code/install.sh" >> "${INSTALL_LOG}" 2>&1 || {
-    show_failure "Eliseus Sorter — setup failed" "See logs/install.log in the project folder (${REPO_ROOT})."
-    exit 1
-  }
+  show_failure "Eliseus Sorter — setup required" "Run installer.command from the project folder once (installs everything in a single step). See logs/install.log at: ${REPO_ROOT}"
+  exit 1
 fi
 
 if ! "${VENV}/bin/python" "${RESOURCES}/code/verify_runtime.py" >> "${APP_LOG}" 2>&1; then
-  show_failure "Eliseus Sorter is not ready" "See logs/app.log in the project folder (${REPO_ROOT}). Delete the venv in Application Support and open the app again to re-run setup."
+  show_failure "Eliseus Sorter is not ready" "Re-run installer.command from the project folder. Log: ${LOG_DIR}/app.log"
   exit 1
 fi
 
 cd "${RESOURCES}/code"
 if ! "${VENV}/bin/python" gui_app.py >> "${APP_LOG}" 2>&1; then
-  show_failure "Eliseus Sorter quit unexpectedly" "See logs/app.log in the project folder (${REPO_ROOT})."
+  show_failure "Eliseus Sorter quit unexpectedly" "See ${LOG_DIR}/app.log"
   exit 1
 fi
