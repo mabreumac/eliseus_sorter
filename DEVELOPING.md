@@ -43,4 +43,15 @@ bash code/launch.sh --local
 ```bash
 python code/main.py --input /path/to/photos --output /path/to/sorted
 python code/main.py -i /path/in -o /path/out --naming-reference /path/to/names
+python code/main.py -i /path/in -o /path/out --flat   # no class folders (portrait-only batches)
 ```
+
+Common flags:
+
+| Flag | Description |
+|------|-------------|
+| `--naming-reference-skip N` | Levels up from each reference photo's folder to the student name |
+| `--scan-workers 1–4` | Parallel face scanning |
+| `--inference-device auto\|cpu\|coreml\|cuda` | Inference backend |
+| `--duplicate-group-photos` | Also copy group photos into person folders |
+| `--flat` | `Person_001` at output root (no class photo required) |

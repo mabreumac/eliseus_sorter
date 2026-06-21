@@ -49,10 +49,14 @@ Logs: **`logs/install.log`** in the project folder.
 1. **Input** — folder with your photos  
 2. **Output** — where sorted photos should go  
 3. **Naming ref** *(optional)* — reference portraits to name students (see below)  
-4. **Ref folder skip** — wrapper folders between the naming ref root and student names (default: 0)  
+4. **Ref folder skip** — how many folder levels to walk **up** from each reference photo to the student name (see below)  
 5. **Class if faces >** — photos with more faces than this count define a class (default: 5)  
 6. **Duplicate group photos** — when checked, group photos are also copied into each matched person folder  
-7. Click **Sort photos**
+7. **Scan workers** — parallel face scanning (`1` = safest; `2–4` = faster, more RAM)  
+8. **Acceleration** — `Auto` uses Apple GPU (CoreML) on M-series Macs when available; `CPU only` to disable  
+9. Click **Sort photos**
+
+While sorting, the app shows **phase progress** (scan, cluster, naming, copy), **elapsed time**, **memory**, and **CPU** usage.
 
 ### Input and output
 
@@ -65,31 +69,36 @@ If your **Input** folder has immediate subfolders, each one is sorted separately
 
 ## Optional: name students automatically
 
-Point **Naming ref** at a folder of reference portraits — one subfolder per student, at least one clear single-face photo each (photos can be in subfolders under the student folder).
+Point **Naming ref** at a folder of reference portraits. The app finds **every photo** under that folder, then derives each student name by walking **up** from the photo’s folder (depth-agnostic — JPGs can be in any subfolder).
 
-**Default layout** (`Ref folder skip = 0`):
+**Ref folder skip** = levels **up** from the folder that holds the JPG:
+
+| Skip | Student name is… |
+|------|------------------|
+| **0** | The folder that directly contains the photo |
+| **1** | One folder above that |
+| **2** | Two folders above that |
+
+**Example** — same student, photo nested deep (`skip = 1` → `Maria`):
 
 ```
 naming_reference/
-  Maria_Silva/
+  2024/
+    ClassA/
+      Maria/
+        pics/
+          portrait.jpg
+```
+
+**Example** — photo directly in the student folder (`skip = 0`):
+
+```
+naming_reference/
+  Maria/
     portrait.jpg
-  Joao_Santos/
-    photos/
-      photo.jpg
 ```
 
-**With wrapper folders** (`Ref folder skip = 1`):
-
-```
-naming_reference/
-  export_2024/          ← skipped
-    Maria_Silva/
-      portrait.jpg
-    Joao_Santos/
-      photo.jpg
-```
-
-Matched output folders are renamed from `Person_001` to the student folder name.
+Each student needs at least one clear **single-face** photo. Matched output folders are renamed from `Person_001` to that student name.
 
 ---
 
@@ -98,13 +107,42 @@ Matched output folders are renamed from `Person_001` to the student folder name.
 ```
 output/
   class_001/
-    _class_photos/      ← large class group shot
-    _group_photos/      ← smaller group photos
-    Maria_Silva/        ← one student (or Person_001 without naming ref)
-  _unmatched/           ← no face detected
+    _class_photos/      ← large class group shots (6+ faces by default)
+    _group_photos/      ← smaller group photos for this class
+    Maria_Silva/        ← matched student (or Person_001 without naming ref)
+  class_002/
+    ...
+  _no_class/            ← faces that did not match any class roster (still clustered)
+    Person_001/
+    _group_photos/
+  _unmatched/           ← no face detected or unreadable image
 ```
 
-With **Duplicate group photos** unchecked (default), multi-face photos go only to `_group_photos` (or `_class_photos` for class shots), not into individual student folders.
+- **Multiple class photos of the same class** merge into one `class_001` folder when ≥ 50% of faces match.  
+- With **Duplicate group photos** unchecked (default), multi-face photos go only to `_group_photos` / `_class_photos`, not into individual student folders.  
+- Portraits with **blurred faces in the background** are less likely to count as group photos (small/low-confidence detections are filtered).
+
+---
+
+## Performance (GUI & defaults)
+
+| Setting | Recommendation |
+|---------|----------------|
+| **Acceleration → Auto** | Best on Apple Silicon (uses CoreML GPU) |
+| **Scan workers → 1** | Safest RAM use; use with GPU |
+| **Scan workers → 2** | Good balance on 16 GB Macs |
+| **Scan workers → 3–4** | Faster scan; ~200 MB RAM per extra worker |
+
+After changing defaults in `code/config.py`, rebuild with **`installer.command`** or **`bash code/build_mac_app.sh`**.
+
+Useful `config.py` knobs:
+
+| Constant | Default | Effect |
+|----------|---------|--------|
+| `MIN_FACE_AREA_RATIO` | `0.12` | Ignore background faces much smaller than the main subject; `0` = off |
+| `MIN_FACE_DET_SCORE` | `0.45` | Drop low-confidence face detections |
+| `MAX_IMAGE_WIDTH` | `1024` | Lower = faster scan, less accurate on tiny faces |
+| `SCAN_WORKERS` | `0` (→ 1 in app) | Default parallel scan processes in bundled config |
 
 ---
 
@@ -116,9 +154,13 @@ With **Duplicate group photos** unchecked (default), multi-face photos go only t
 | Setup failed | See **`logs/install.log`** — then re-run **`installer.command`** |
 | Missing numpy / packages | Re-run **`installer.command`** (reinstalls the full environment) |
 | Slow first sort | Normal — face models download once (~100 MB) |
-| Wrong student names | Check naming ref layout and **Ref folder skip** |
+| Wrong student names | Check naming ref layout and **Ref folder skip** (walk-up from each photo) |
+| Portraits treated as group photos | Raise `MIN_FACE_AREA_RATIO` in `config.py` (e.g. `0.18`) and rebuild |
+| Real group rows missing faces | Lower `MIN_FACE_AREA_RATIO` slightly (e.g. `0.08`) |
+| No class photos in batch | Need at least one photo with more than **Class if faces** count, or use CLI **`--flat`** (see [DEVELOPING.md](DEVELOPING.md)) |
+| GPU + high RAM use | Use **Scan workers = 1** with **Acceleration = Auto** |
 
-Settings: `~/Library/Application Support/Eliseus Sorter/`  
+Settings: `~/Library/Application Support/Eliseus Sorter/settings.json`  
 Logs: **`logs/`** in the project folder (same folder as `installer.command`)
 
 ---
