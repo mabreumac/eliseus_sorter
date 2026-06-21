@@ -1,10 +1,11 @@
-"""Resolve project and data paths for development vs macOS .app bundle."""
+"""Application install location vs user data (photos, output)."""
 
 from __future__ import annotations
 
+import json
 import os
-import sys
 from pathlib import Path
+from typing import Any
 
 
 def is_app_bundle() -> bool:
@@ -17,36 +18,44 @@ def project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def data_dir() -> Path:
-    if is_app_bundle():
-        return Path.home() / "Library/Application Support/Eliseus Sorter/data"
-    return project_root() / "data"
-
-
-def support_dir() -> Path:
+def app_support_dir() -> Path:
+    """App-only files: venv, reference DB, settings, logs. Never user photos."""
     return Path.home() / "Library/Application Support/Eliseus Sorter"
 
 
-def ensure_data_dirs() -> None:
-    for path in (
-        data_dir(),
-        data_dir() / "ground_truth",
-        data_dir() / "test_subset",
-        data_dir() / "group_photos",
-        data_dir() / "output",
-        data_dir() / "sorted_students",
-    ):
-        path.mkdir(parents=True, exist_ok=True)
-    if is_app_bundle():
-        support_dir().mkdir(parents=True, exist_ok=True)
+def default_reference_db() -> Path:
+    return app_support_dir() / "reference.db"
 
 
-# Exported constants (used by config.py)
-PROJECT_ROOT = project_root()
-DATA_DIR = data_dir()
-GROUND_TRUTH_DIR = DATA_DIR / "ground_truth"
-TEST_SUBSET_DIR = DATA_DIR / "test_subset"
-GROUP_PHOTOS_DIR = DATA_DIR / "group_photos"
-OUTPUT_DIR = DATA_DIR / "output"
-SORTED_STUDENTS_DIR = OUTPUT_DIR / "sorted_students"
-DATABASE_PATH = DATA_DIR / "school_photos.db"
+def settings_path() -> Path:
+    return app_support_dir() / "settings.json"
+
+
+def benchmark_data_dir() -> Path:
+    """Developer benchmarking datasets (not used by the production app)."""
+    return project_root() / "data" / "benchmark"
+
+
+def results_dir() -> Path:
+    """Generated reports and benchmark outputs (never committed)."""
+    return project_root() / "results"
+
+
+def load_settings() -> dict[str, Any]:
+    path = settings_path()
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_settings(settings: dict[str, Any]) -> None:
+    app_support_dir().mkdir(parents=True, exist_ok=True)
+    settings_path().write_text(json.dumps(settings, indent=2), encoding="utf-8")
+
+
+def ensure_app_support() -> None:
+    app_support_dir().mkdir(parents=True, exist_ok=True)
+    (app_support_dir() / "logs").mkdir(parents=True, exist_ok=True)

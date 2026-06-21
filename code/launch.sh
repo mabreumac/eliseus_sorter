@@ -5,9 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=paths.sh
 source "${SCRIPT_DIR}/paths.sh"
-APP_PY="${PROJECT_ROOT}/code/gui_app.py"
-
-cd "${PROJECT_ROOT}"
+cd "${SCRIPT_DIR}"
 
 if [[ ! -d "${VENV_DIR}" ]]; then
   echo ""
@@ -33,7 +31,7 @@ if ! python -c "import tkinter" 2>/dev/null; then
   exit 1
 fi
 
-if ! python "${PROJECT_ROOT}/scripts/verify_install.py"; then
+if ! python "${SCRIPT_DIR}/verify_install.py"; then
   echo ""
   echo "Installation verification failed."
   echo "Please run  Install.command  again."
@@ -42,4 +40,4 @@ if ! python "${PROJECT_ROOT}/scripts/verify_install.py"; then
   exit 1
 fi
 
-exec python "${APP_PY}"
+exec python gui_app.py

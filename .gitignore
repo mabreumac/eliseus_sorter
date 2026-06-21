@@ -6,8 +6,11 @@ __pycache__/
 
 # --- Anonymity: never commit student data or identifiers ---
 
-# Entire local data tree (folder names, photos, DB, reports)
+# Entire local data tree (folder names, photos)
 data/*/*
+
+# Generated reports (match_report_*.json/csv, manifests, etc.)
+results/*/*
 
 # Photos / media anywhere in the repo
 *.jpg

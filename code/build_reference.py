@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from config import GROUND_TRUTH_DIR, DATABASE_PATH
+from config import DEFAULT_REFERENCE_DB
 from database import file_path_exists, init_database, insert_reference_face
 from embeddings import encode_faces_from_path
 from group_photos import GroupPhotoSettings
@@ -34,8 +34,8 @@ class BuildReferenceStats:
 
 
 def build_reference_database(
-    ground_truth_dir: Path = GROUND_TRUTH_DIR,
-    db_path: Path = DATABASE_PATH,
+    ground_truth_dir: Path,
+    db_path: Path = DEFAULT_REFERENCE_DB,
     group_settings: Optional[GroupPhotoSettings] = None,
     on_progress: Optional[ProgressCallback] = None,
     should_cancel: Optional[CancelCallback] = None,

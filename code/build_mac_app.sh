@@ -20,11 +20,13 @@ cp "${PROJECT_ROOT}/macos/app_launcher.sh" "${APP_PATH}/Contents/MacOS/eliseus_s
 chmod +x "${APP_PATH}/Contents/MacOS/eliseus_sorter"
 
 cp -R "${PROJECT_ROOT}/code" "${APP_PATH}/Contents/Resources/"
-cp -R "${PROJECT_ROOT}/scripts" "${APP_PATH}/Contents/Resources/"
 cp "${PROJECT_ROOT}/requirements.txt" "${APP_PATH}/Contents/Resources/"
 
 # Placeholder for a custom icon later (optional).
 touch "${APP_PATH}/Contents/Resources/.keep"
+
+# Allow opening unsigned/local apps (no admin needed).
+xattr -cr "${APP_PATH}" 2>/dev/null || true
 
 info "Created: ${APP_PATH}"
 info "Next: double-click 'Install to Applications.command' or drag the app to /Applications"

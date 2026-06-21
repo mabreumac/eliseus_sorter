@@ -1,12 +1,14 @@
 #!/bin/bash
 # Double-click this file in Finder to install (macOS).
 cd "$(dirname "$0")"
+# Remove quarantine flag so macOS allows running (no admin needed).
+xattr -cr "$(pwd)" 2>/dev/null || true
 clear
 echo "=============================================="
 echo "  Eliseus Sorter — Install"
 echo "=============================================="
 echo ""
-bash "./scripts/install.sh"
+bash "./code/install.sh"
 STATUS=$?
 echo ""
 if [[ ${STATUS} -eq 0 ]]; then

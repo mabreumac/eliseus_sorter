@@ -6,4 +6,4 @@ else
   PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fi
 
-VENV_DIR="${ELISEUS_VENV_DIR:-${HOME}/.eliseus_sorter/venv}"
+VENV_DIR="${ELISEUS_VENV_DIR:-${HOME}/Library/Application Support/Eliseus Sorter/venv}"

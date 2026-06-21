@@ -7,7 +7,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from config import GROUP_PHOTOS_DIR, OUTPUT_DIR, SORTED_STUDENTS_DIR
+from config import GROUP_OUTPUT_FOLDER
 
 
 class GroupPhotoMode(str, Enum):
@@ -20,21 +20,31 @@ class GroupPhotoMode(str, Enum):
 
 
 GROUP_PHOTO_MODE_LABELS: dict[GroupPhotoMode, str] = {
-    GroupPhotoMode.FIRST_FACE: "First face only",
-    GroupPhotoMode.LARGEST_FACE: "Largest face only",
-    GroupPhotoMode.ALL_FACES: "All faces (one match per person)",
-    GroupPhotoMode.SKIP: "Skip group photos (2+ faces)",
+    GroupPhotoMode.FIRST_FACE: "Group folder only",
+    GroupPhotoMode.LARGEST_FACE: "Group folder only (legacy)",
+    GroupPhotoMode.ALL_FACES: "Group folder + person folders (all faces)",
+    GroupPhotoMode.SKIP: "Group folder only, skip person folders",
 }
+
+
+def is_group_reference_folder(name: str, group_folder: str = GROUP_OUTPUT_FOLDER) -> bool:
+    """True if a ground-truth folder holds group photos, not student reference."""
+    return name.strip().casefold() == group_folder.strip().casefold()
 
 
 @dataclass(frozen=True)
 class GroupPhotoSettings:
-    """User-configurable group photo behaviour."""
-
     mode: GroupPhotoMode = GroupPhotoMode.FIRST_FACE
+    group_output_folder: Optional[str] = GROUP_OUTPUT_FOLDER
     group_photos_dir: Optional[Path] = None
     sort_to_student_folders: bool = False
-    sorted_output_dir: Path = SORTED_STUDENTS_DIR
+    sorted_output_dir: Optional[Path] = None
+
+    def resolved_group_output_folder(self) -> Optional[str]:
+        if self.group_output_folder is None:
+            return None
+        name = str(self.group_output_folder).strip()
+        return name or None
 
     def resolved_group_photos_dir(self) -> Optional[Path]:
         if self.group_photos_dir is None:
@@ -43,8 +53,3 @@ class GroupPhotoSettings:
         if not str(path).strip():
             return None
         return path
-
-    def resolved_sorted_output_dir(self, output_dir: Path = OUTPUT_DIR) -> Path:
-        if self.sort_to_student_folders:
-            return self.sorted_output_dir
-        return output_dir / "sorted_students"

@@ -1,9 +1,11 @@
-# Pre-trained dlib model files (PyPI wheel includes binaries; do not use git URL).
-face_recognition_models>=0.3.0
+# Face pipeline — InsightFace (RetinaFace + ArcFace via ONNX)
+insightface>=0.7.3
+onnxruntime>=1.16.0
+opencv-python-headless>=4.8.0
 
-face_recognition>=1.3.0
 numpy>=1.24.0
 pandas>=2.0.0
+matplotlib>=3.8.0
 Pillow>=10.0.0
 customtkinter>=5.2.0
 setuptools>=65.0.0

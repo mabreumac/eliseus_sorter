@@ -107,7 +107,7 @@ Or install Python manually:
 
 Advanced (if Homebrew is already installed):
   brew install python@3.12
-  bash scripts/install.sh"
+  bash code/install.sh"
 }
 
 info "Eliseus Sorter — installation"
@@ -189,50 +189,22 @@ and run Install again."
 
 ensure_tkinter
 
-install_dlib() {
-  info "Installing face recognition libraries (this may take several minutes)"
+install_insightface() {
+  info "Installing InsightFace stack (ONNX models download on first run)"
 
-  if python -c "import dlib" 2>/dev/null; then
-    ok "dlib already installed"
-    return 0
+  if python -c "import insightface, onnxruntime, cv2" 2>/dev/null; then
+    ok "InsightFace packages present"
   fi
-
-  if command -v brew >/dev/null 2>&1; then
-    brew install cmake dlib 2>/dev/null || brew install cmake
-  fi
-
-  if python -m pip install dlib; then
-    ok "dlib installed"
-    return 0
-  fi
-
-  warn "dlib did not install on the first try."
-
-  if command -v brew >/dev/null 2>&1; then
-    brew install cmake pkg-config
-    python -m pip install --no-cache-dir dlib
-    ok "dlib installed (retry)"
-    return 0
-  fi
-
-  fail "Could not install dlib. Install Homebrew (https://brew.sh) and run Install again.
-See install.log for details."
 }
 
-install_dlib
+install_insightface
 
 info "Installing remaining packages"
 python -m pip install -r "${PROJECT_ROOT}/requirements.txt"
 ok "Python packages installed"
 
-info "Installing face recognition models (~100 MB, local files)"
-python -m pip install --upgrade "setuptools>=65.0.0"
-if ! python "${PROJECT_ROOT}/scripts/install_models.py"; then
-  fail "Could not install face recognition model files. See install.log"
-fi
-
 info "Verifying installation"
-if ! python "${PROJECT_ROOT}/scripts/verify_install.py"; then
+if ! python "${PROJECT_ROOT}/code/verify_install.py"; then
   fail "Installation verification failed. See messages above and install.log"
 fi
 ok "Verification passed"
@@ -244,9 +216,8 @@ $(printf '\033[1;32mInstallation complete!\033[0m')
 Next step:
   Double-click  \033[1mEliseus Sorter.command\033[0m  in this folder.
 
-Put your photos here:
-  data/ground_truth/<student_name>/*.jpg
-  data/test_subset/*.jpg
+In the app, choose any input folder (your photos) and an output folder
+for sorted results (Person_001, Person_002, Grupo, …).
 
 Log saved to: ${LOG_FILE}
 Python environment: ${VENV_DIR}

@@ -1,4 +1,4 @@
-"""Face detection and encoding helpers."""
+"""Face detection and encoding via InsightFace (RetinaFace + ArcFace)."""
 
 from __future__ import annotations
 
@@ -6,17 +6,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-import face_recognition
+import cv2
 import numpy as np
 
+from face_engine import get_face_analysis
 from group_photos import GroupPhotoMode
-from image_utils import load_image_resized
 
 
 @dataclass(frozen=True)
 class EncodingResult:
-    """Outcome of attempting to encode a face from one image."""
-
     embedding: Optional[np.ndarray]
     num_faces: int
     error: Optional[str] = None
@@ -24,92 +22,102 @@ class EncodingResult:
 
 @dataclass(frozen=True)
 class FaceEncoding:
-    """One encoded face from an image."""
-
     face_index: int
     embedding: np.ndarray
 
 
 @dataclass(frozen=True)
 class MultiFaceEncodingResult:
-    """All face encodings selected by the group-photo mode."""
-
     faces: list[FaceEncoding] = field(default_factory=list)
     num_faces: int = 0
     skipped_group: bool = False
     error: Optional[str] = None
 
 
-def _face_area(location: tuple[int, int, int, int]) -> int:
-    top, right, bottom, left = location
-    return max(0, bottom - top) * max(0, right - left)
+def _face_area(bbox: np.ndarray) -> float:
+    x1, y1, x2, y2 = bbox[:4]
+    return max(0.0, x2 - x1) * max(0.0, y2 - y1)
 
 
-def _select_face_indices(
-    locations: list[tuple[int, int, int, int]],
-    mode: GroupPhotoMode,
-) -> list[int]:
-    if not locations:
+def _select_face_indices(num_faces: int, areas: list[float], mode: GroupPhotoMode) -> list[int]:
+    if num_faces == 0:
         return []
-    if len(locations) == 1:
+    if num_faces == 1:
         return [0]
     if mode == GroupPhotoMode.SKIP:
         return []
     if mode == GroupPhotoMode.FIRST_FACE:
         return [0]
     if mode == GroupPhotoMode.LARGEST_FACE:
-        areas = [_face_area(loc) for loc in locations]
-        return [areas.index(max(areas))]
+        return [int(np.argmax(areas))]
     if mode == GroupPhotoMode.ALL_FACES:
-        return list(range(len(locations)))
+        return list(range(num_faces))
     return [0]
+
+
+def normalize_embedding(embedding: np.ndarray) -> np.ndarray:
+    vec = np.asarray(embedding, dtype=np.float64).flatten()
+    norm = np.linalg.norm(vec)
+    if norm == 0:
+        return vec
+    return vec / norm
+
+
+def _normalize(embedding: np.ndarray) -> np.ndarray:
+    return normalize_embedding(embedding)
+
+
+def _load_bgr(image_path: Path) -> np.ndarray | None:
+    image = cv2.imread(str(image_path))
+    if image is None:
+        return None
+    return image
 
 
 def encode_faces_from_path(
     image_path: Path,
     mode: GroupPhotoMode = GroupPhotoMode.FIRST_FACE,
 ) -> MultiFaceEncodingResult:
-    """Detect faces and return embeddings according to group-photo mode."""
-    try:
-        image = load_image_resized(image_path)
-    except (OSError, ValueError) as exc:
-        return MultiFaceEncodingResult(error=str(exc))
+    """Detect faces and return L2-normalized ArcFace embeddings."""
+    image = _load_bgr(image_path)
+    if image is None:
+        return MultiFaceEncodingResult(error=f"cannot read image: {image_path.name}")
 
     try:
-        locations = face_recognition.face_locations(image)
+        detected = get_face_analysis().get(image)
     except Exception as exc:  # noqa: BLE001
         return MultiFaceEncodingResult(error=str(exc))
 
-    if not locations:
+    if not detected:
         return MultiFaceEncodingResult(num_faces=0)
 
-    indices = _select_face_indices(locations, mode)
-    if len(locations) > 1 and mode == GroupPhotoMode.SKIP:
-        return MultiFaceEncodingResult(num_faces=len(locations), skipped_group=True)
+    # Largest faces first — stable ordering for group-photo modes.
+    detected = sorted(detected, key=lambda f: _face_area(f.bbox), reverse=True)
+    areas = [_face_area(face.bbox) for face in detected]
+    indices = _select_face_indices(len(detected), areas, mode)
 
-    try:
-        encodings = face_recognition.face_encodings(image, known_face_locations=locations)
-    except Exception as exc:  # noqa: BLE001
-        return MultiFaceEncodingResult(num_faces=len(locations), error=str(exc))
-
-    if not encodings:
-        return MultiFaceEncodingResult(num_faces=len(locations))
+    if len(detected) > 1 and mode == GroupPhotoMode.SKIP:
+        return MultiFaceEncodingResult(num_faces=len(detected), skipped_group=True)
 
     faces: list[FaceEncoding] = []
-    for index in indices:
-        if index < len(encodings):
-            faces.append(
-                FaceEncoding(
-                    face_index=index,
-                    embedding=np.asarray(encodings[index], dtype=np.float64),
-                )
+    for out_index, src_index in enumerate(indices):
+        face = detected[src_index]
+        raw = getattr(face, "normed_embedding", None)
+        if raw is None:
+            raw = getattr(face, "embedding", None)
+        if raw is None:
+            continue
+        faces.append(
+            FaceEncoding(
+                face_index=out_index,
+                embedding=_normalize(np.asarray(raw)),
             )
+        )
 
-    return MultiFaceEncodingResult(faces=faces, num_faces=len(locations))
+    return MultiFaceEncodingResult(faces=faces, num_faces=len(detected))
 
 
 def encode_face_from_path(image_path: Path) -> EncodingResult:
-    """Encode a single face using the legacy first-face behaviour."""
     result = encode_faces_from_path(image_path, GroupPhotoMode.FIRST_FACE)
     if result.error:
         return EncodingResult(embedding=None, num_faces=result.num_faces, error=result.error)
@@ -119,6 +127,11 @@ def encode_face_from_path(image_path: Path) -> EncodingResult:
         embedding=result.faces[0].embedding,
         num_faces=result.num_faces,
     )
+
+
+def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    """Cosine similarity for L2-normalized embeddings (higher = more alike)."""
+    return float(np.dot(a, b))
 
 
 def euclidean_distance(a: np.ndarray, b: np.ndarray) -> float:

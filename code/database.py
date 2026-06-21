@@ -8,19 +8,17 @@ from typing import Generator
 
 import numpy as np
 
-from config import DATABASE_PATH
-
-EMBEDDING_DIM = 128
+from config import DEFAULT_REFERENCE_DB, EMBEDDING_DIM
 
 
-def _connect(db_path: Path = DATABASE_PATH) -> sqlite3.Connection:
+def _connect(db_path: Path = DEFAULT_REFERENCE_DB) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
 
 
-def init_database(db_path: Path = DATABASE_PATH) -> None:
+def init_database(db_path: Path = DEFAULT_REFERENCE_DB) -> None:
     """Create tables if they do not exist."""
     with _connect(db_path) as conn:
         conn.execute(
@@ -40,7 +38,7 @@ def init_database(db_path: Path = DATABASE_PATH) -> None:
         conn.commit()
 
 
-def file_path_exists(file_path: str, db_path: Path = DATABASE_PATH) -> bool:
+def file_path_exists(file_path: str, db_path: Path = DEFAULT_REFERENCE_DB) -> bool:
     """Return True if this file path is already indexed."""
     with _connect(db_path) as conn:
         row = conn.execute(
@@ -54,7 +52,7 @@ def insert_reference_face(
     student_name: str,
     file_path: str,
     embedding: np.ndarray,
-    db_path: Path = DATABASE_PATH,
+    db_path: Path = DEFAULT_REFERENCE_DB,
 ) -> int:
     """Insert a single reference embedding; returns the new row id."""
     blob = embedding.astype(np.float64).tobytes()
@@ -71,7 +69,7 @@ def insert_reference_face(
 
 
 def iter_reference_embeddings(
-    db_path: Path = DATABASE_PATH,
+    db_path: Path = DEFAULT_REFERENCE_DB,
 ) -> Generator[tuple[str, str, np.ndarray], None, None]:
     """
     Stream reference rows one at a time.
@@ -91,13 +89,13 @@ def iter_reference_embeddings(
             yield row["student_name"], row["file_path"], embedding
 
 
-def count_reference_faces(db_path: Path = DATABASE_PATH) -> int:
+def count_reference_faces(db_path: Path = DEFAULT_REFERENCE_DB) -> int:
     with _connect(db_path) as conn:
         row = conn.execute("SELECT COUNT(*) AS n FROM reference_faces").fetchone()
     return int(row["n"])
 
 
-def count_students(db_path: Path = DATABASE_PATH) -> int:
+def count_students(db_path: Path = DEFAULT_REFERENCE_DB) -> int:
     with _connect(db_path) as conn:
         row = conn.execute(
             "SELECT COUNT(DISTINCT student_name) AS n FROM reference_faces"

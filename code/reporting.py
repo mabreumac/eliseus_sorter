@@ -10,7 +10,7 @@ from typing import Iterable
 
 import pandas as pd
 
-from config import MATCH_TOLERANCE, OUTPUT_DIR
+from config import MATCH_TOLERANCE
 from group_photos import GroupPhotoSettings
 from match_subset import MatchResult
 
@@ -66,7 +66,7 @@ def print_summary_table(results: Iterable[MatchResult]) -> None:
 
 def save_reports(
     results: list[MatchResult],
-    output_dir: Path = OUTPUT_DIR,
+    output_dir: Path,
     tolerance: float = MATCH_TOLERANCE,
     group_settings: GroupPhotoSettings | None = None,
 ) -> tuple[Path, Path]:
@@ -148,3 +148,50 @@ def print_aggregate_summary(df: pd.DataFrame) -> None:
     if not known.empty and known["confidence_distance"].notna().any():
         avg_dist = known["confidence_distance"].mean()
         print(f"\nMean distance (known matches): {avg_dist:.3f}")
+
+
+def print_output_folder_summary(output_dir: Path) -> None:
+    """Print per-folder file counts under a sorted output directory."""
+    if not output_dir.is_dir():
+        print(f"Output folder not found: {output_dir}")
+        return
+
+    print(f"\nSorted output: {output_dir}")
+    folders = sorted(p for p in output_dir.iterdir() if p.is_dir())
+    if not folders:
+        print("  (empty)")
+        return
+
+    for folder in folders:
+        count = sum(1 for f in folder.iterdir() if f.is_file())
+        print(f"  {folder.name}: {count}")
+
+
+def print_manifest_accuracy(df: pd.DataFrame, manifest_path: Path) -> None:
+    """Compare match results to the local label manifest (if present)."""
+    if not manifest_path.is_file() or df.empty:
+        return
+
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    truth = {row["test_file"]: row["expected_student"] for row in payload.get("images", [])}
+    if not truth:
+        return
+
+    labeled = df[df["test_file"].isin(truth)].copy()
+    labeled["expected_student"] = labeled["test_file"].map(truth)
+    labeled["correct"] = labeled["matched_student"] == labeled["expected_student"]
+
+    matched = labeled[
+        ~labeled["matched_student"].isin(["Unknown", "No Face Detected", "Skipped (Group Photo)"])
+    ]
+    correct = int(matched["correct"].sum()) if not matched.empty else 0
+
+    print("\nAccuracy vs label manifest:")
+    print(f"  Total input photos:     {len(labeled)}")
+    print(f"  Matched to a student:   {len(matched)}")
+    if matched.empty:
+        print("  Correct assignments:    —")
+    else:
+        print(f"  Correct assignments:    {correct} / {len(matched)} ({100 * correct / len(matched):.1f}%)")
+    no_face = int((labeled["matched_student"] == "No Face Detected").sum())
+    print(f"  No face detected:       {no_face}")

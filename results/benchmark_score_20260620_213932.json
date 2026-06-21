@@ -1,0 +1,466 @@
+{
+  "generated_at_utc": "2026-06-20T21:39:32.736879+00:00",
+  "total_photos": 165,
+  "correct": 164,
+  "accuracy": 0.9939393939393939,
+  "no_face": 0,
+  "group_folder_hits": 14,
+  "cluster_to_student": {
+    "Person_018": "AURORA ",
+    "Person_012": "DAVI VENANCIO",
+    "Person_020": "EDITE ",
+    "Person_009": "ELODIE MARQUES DA SILVA",
+    "Person_004": "ENZO",
+    "Person_003": "EVA CABRAL",
+    "Person_015": "EVA PIRES DE ALMEIDA",
+    "Person_006": "GABRIEL",
+    "Person_002": "GUSTAVO ",
+    "Person_001": "HEITOR"
+  },
+  "mappings": [
+    {
+      "person_id": "Person_001",
+      "predicted_student": "HEITOR",
+      "votes": 15,
+      "total_in_cluster": 15,
+      "purity": 1.0
+    },
+    {
+      "person_id": "Person_002",
+      "predicted_student": "GUSTAVO ",
+      "votes": 15,
+      "total_in_cluster": 15,
+      "purity": 1.0
+    },
+    {
+      "person_id": "Person_003",
+      "predicted_student": "EVA CABRAL",
+      "votes": 15,
+      "total_in_cluster": 15,
+      "purity": 1.0
+    },
+    {
+      "person_id": "Person_004",
+      "predicted_student": "ENZO",
+      "votes": 15,
+      "total_in_cluster": 15,
+      "purity": 1.0
+    },
+    {
+      "person_id": "Person_006",
+      "predicted_student": "GABRIEL",
+      "votes": 15,
+      "total_in_cluster": 15,
+      "purity": 1.0
+    },
+    {
+      "person_id": "Person_009",
+      "predicted_student": "ELODIE MARQUES DA SILVA",
+      "votes": 15,
+      "total_in_cluster": 15,
+      "purity": 1.0
+    },
+    {
+      "person_id": "Person_012",
+      "predicted_student": "DAVI VENANCIO",
+      "votes": 15,
+      "total_in_cluster": 15,
+      "purity": 1.0
+    },
+    {
+      "person_id": "Person_015",
+      "predicted_student": "EVA PIRES DE ALMEIDA",
+      "votes": 15,
+      "total_in_cluster": 15,
+      "purity": 1.0
+    },
+    {
+      "person_id": "Person_018",
+      "predicted_student": "AURORA ",
+      "votes": 15,
+      "total_in_cluster": 15,
+      "purity": 1.0
+    },
+    {
+      "person_id": "Person_020",
+      "predicted_student": "EDITE ",
+      "votes": 15,
+      "total_in_cluster": 15,
+      "purity": 1.0
+    },
+    {
+      "person_id": "Person_022",
+      "predicted_student": "\u2014",
+      "votes": 0,
+      "total_in_cluster": 6,
+      "purity": 0.0
+    },
+    {
+      "person_id": "Person_023",
+      "predicted_student": "\u2014",
+      "votes": 0,
+      "total_in_cluster": 2,
+      "purity": 0.0
+    },
+    {
+      "person_id": "Person_024",
+      "predicted_student": "\u2014",
+      "votes": 0,
+      "total_in_cluster": 1,
+      "purity": 0.0
+    },
+    {
+      "person_id": "Person_025",
+      "predicted_student": "\u2014",
+      "votes": 0,
+      "total_in_cluster": 3,
+      "purity": 0.0
+    },
+    {
+      "person_id": "Person_026",
+      "predicted_student": "\u2014",
+      "votes": 0,
+      "total_in_cluster": 3,
+      "purity": 0.0
+    },
+    {
+      "person_id": "Person_027",
+      "predicted_student": "\u2014",
+      "votes": 0,
+      "total_in_cluster": 2,
+      "purity": 0.0
+    },
+    {
+      "person_id": "Person_028",
+      "predicted_student": "\u2014",
+      "votes": 0,
+      "total_in_cluster": 1,
+      "purity": 0.0
+    },
+    {
+      "person_id": "Person_029",
+      "predicted_student": "\u2014",
+      "votes": 0,
+      "total_in_cluster": 1,
+      "purity": 0.0
+    },
+    {
+      "person_id": "Person_030",
+      "predicted_student": "\u2014",
+      "votes": 0,
+      "total_in_cluster": 7,
+      "purity": 0.0
+    }
+  ],
+  "cluster_profiles": [
+    {
+      "folder": "Grupo",
+      "file_count": 44,
+      "dominant_student": "Grupo",
+      "purity": 0.3181818181818182,
+      "label_counts": {
+        "Grupo": 14,
+        "AURORA ": 6,
+        "ENZO": 8,
+        "EDITE ": 8,
+        "GUSTAVO ": 8
+      }
+    },
+    {
+      "folder": "Person_001",
+      "file_count": 19,
+      "dominant_student": "HEITOR",
+      "purity": 0.7894736842105263,
+      "label_counts": {
+        "Grupo": 3,
+        "Unknown": 1,
+        "HEITOR": 15
+      }
+    },
+    {
+      "folder": "Person_002",
+      "file_count": 17,
+      "dominant_student": "GUSTAVO ",
+      "purity": 0.8823529411764706,
+      "label_counts": {
+        "Unknown": 2,
+        "GUSTAVO ": 15
+      }
+    },
+    {
+      "folder": "Person_003",
+      "file_count": 20,
+      "dominant_student": "EVA CABRAL",
+      "purity": 0.75,
+      "label_counts": {
+        "Unknown": 4,
+        "Grupo": 1,
+        "EVA CABRAL": 15
+      }
+    },
+    {
+      "folder": "Person_004",
+      "file_count": 17,
+      "dominant_student": "ENZO",
+      "purity": 0.8823529411764706,
+      "label_counts": {
+        "Unknown": 1,
+        "Grupo": 1,
+        "ENZO": 15
+      }
+    },
+    {
+      "folder": "Person_005",
+      "file_count": 1,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 1
+      }
+    },
+    {
+      "folder": "Person_006",
+      "file_count": 19,
+      "dominant_student": "GABRIEL",
+      "purity": 0.7894736842105263,
+      "label_counts": {
+        "Unknown": 3,
+        "Grupo": 1,
+        "GABRIEL": 15
+      }
+    },
+    {
+      "folder": "Person_007",
+      "file_count": 1,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 1
+      }
+    },
+    {
+      "folder": "Person_008",
+      "file_count": 4,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 4
+      }
+    },
+    {
+      "folder": "Person_009",
+      "file_count": 19,
+      "dominant_student": "ELODIE MARQUES DA SILVA",
+      "purity": 0.7894736842105263,
+      "label_counts": {
+        "Unknown": 4,
+        "ELODIE MARQUES DA SILVA": 15
+      }
+    },
+    {
+      "folder": "Person_010",
+      "file_count": 2,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 2
+      }
+    },
+    {
+      "folder": "Person_011",
+      "file_count": 2,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 2
+      }
+    },
+    {
+      "folder": "Person_012",
+      "file_count": 17,
+      "dominant_student": "DAVI VENANCIO",
+      "purity": 0.8823529411764706,
+      "label_counts": {
+        "Unknown": 2,
+        "DAVI VENANCIO": 15
+      }
+    },
+    {
+      "folder": "Person_013",
+      "file_count": 5,
+      "dominant_student": "Unknown",
+      "purity": 0.8,
+      "label_counts": {
+        "Unknown": 4,
+        "Grupo": 1
+      }
+    },
+    {
+      "folder": "Person_014",
+      "file_count": 2,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 2
+      }
+    },
+    {
+      "folder": "Person_015",
+      "file_count": 17,
+      "dominant_student": "EVA PIRES DE ALMEIDA",
+      "purity": 0.8823529411764706,
+      "label_counts": {
+        "Unknown": 1,
+        "Grupo": 1,
+        "EVA PIRES DE ALMEIDA": 15
+      }
+    },
+    {
+      "folder": "Person_016",
+      "file_count": 1,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 1
+      }
+    },
+    {
+      "folder": "Person_017",
+      "file_count": 5,
+      "dominant_student": "Unknown",
+      "purity": 0.8,
+      "label_counts": {
+        "Unknown": 4,
+        "Grupo": 1
+      }
+    },
+    {
+      "folder": "Person_018",
+      "file_count": 20,
+      "dominant_student": "AURORA ",
+      "purity": 0.75,
+      "label_counts": {
+        "Unknown": 3,
+        "Grupo": 2,
+        "AURORA ": 15
+      }
+    },
+    {
+      "folder": "Person_019",
+      "file_count": 5,
+      "dominant_student": "Grupo",
+      "purity": 0.6,
+      "label_counts": {
+        "Unknown": 2,
+        "Grupo": 3
+      }
+    },
+    {
+      "folder": "Person_020",
+      "file_count": 20,
+      "dominant_student": "Unknown",
+      "purity": 0.6,
+      "label_counts": {
+        "Unknown": 12,
+        "EDITE ": 8
+      }
+    },
+    {
+      "folder": "Person_021",
+      "file_count": 1,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 1
+      }
+    },
+    {
+      "folder": "Person_022",
+      "file_count": 6,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 6
+      }
+    },
+    {
+      "folder": "Person_023",
+      "file_count": 2,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 2
+      }
+    },
+    {
+      "folder": "Person_024",
+      "file_count": 1,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 1
+      }
+    },
+    {
+      "folder": "Person_025",
+      "file_count": 3,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 3
+      }
+    },
+    {
+      "folder": "Person_026",
+      "file_count": 3,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 3
+      }
+    },
+    {
+      "folder": "Person_027",
+      "file_count": 2,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 2
+      }
+    },
+    {
+      "folder": "Person_028",
+      "file_count": 1,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 1
+      }
+    },
+    {
+      "folder": "Person_029",
+      "file_count": 1,
+      "dominant_student": "Unknown",
+      "purity": 1.0,
+      "label_counts": {
+        "Unknown": 1
+      }
+    },
+    {
+      "folder": "Person_030",
+      "file_count": 7,
+      "dominant_student": "EDITE ",
+      "purity": 1.0,
+      "label_counts": {
+        "EDITE ": 7
+      }
+    }
+  ],
+  "misclassified_sample": [
+    {
+      "test_file": "JDV_21328.jpg",
+      "expected": "Grupo",
+      "got": "_unmatched"
+    }
+  ]
+}

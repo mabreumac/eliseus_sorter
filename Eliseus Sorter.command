@@ -1,7 +1,7 @@
 #!/bin/bash
 # Double-click this file in Finder to open the app (macOS).
 cd "$(dirname "$0")"
-bash "./scripts/launch.sh"
+bash "./code/launch.sh"
 STATUS=$?
 if [[ ${STATUS} -ne 0 ]]; then
   echo ""

@@ -1,0 +1,670 @@
+{
+  "generated_at_utc": "2026-06-20T21:24:43.039327+00:00",
+  "source_ground_truth": "/Users/marcosmachado/Desktop/Other/other_projs/eliseus_sorter/data/benchmark/ground_truth",
+  "test_subset_dir": "/Users/marcosmachado/Desktop/Other/other_projs/eliseus_sorter/data/benchmark/test_subset",
+  "seed": 42,
+  "preserve_filenames": true,
+  "total_images": 165,
+  "images": [
+    {
+      "test_file": "JDV_21716.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_22149.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_21584.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_21890.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_21378.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_21307.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_22084.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_22037.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_21334.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_21724.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_21762.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_21579.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_22255.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_21955.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_22175.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_21645.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_21700.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_21954.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_22118.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_21901.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_21882.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_21950.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_21919.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_22160.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_21705.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_21956.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_21611.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_21580.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_21725.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_22261.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_22260.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_21367.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_21742.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_21708.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_21643.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_22123.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_21867.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_21608.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_22044.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_21382.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_22120.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_21891.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_21719.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_22173.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_22108.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_21722.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_22156.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_22220.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_21721.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_21774.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_22060.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_21943.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_21915.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_21963.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_21616.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_21353.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_22042.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_22179.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_22080.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_21348.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_21873.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_21715.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_22225.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_21965.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_22191.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_21953.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_22113.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_21328.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_21709.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_21906.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_22254.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_21889.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_22266.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_21920.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_21912.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_22159.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_21385.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_21552.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_21862.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_22222.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_21958.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_22150.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_21900.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_22034.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_22053.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_21871.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_22063.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_21909.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_21904.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_22102.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_21957.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_21902.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_22049.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_22223.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_22259.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_22212.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_22040.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_22176.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_21337.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_21585.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_22163.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_21967.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_22062.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_21642.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_21695.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_21698.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_21905.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_21952.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_22098.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_21620.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_21629.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_21564.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_21874.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_22263.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_22036.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_22106.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_21773.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_21939.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_22129.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_22154.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_21710.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_22180.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_21869.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_21614.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_21896.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_21323.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_22097.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_21962.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_22162.jpg",
+      "expected_student": "EVA PIRES DE ALMEIDA"
+    },
+    {
+      "test_file": "JDV_21692.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_22258.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_22067.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_21394.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_21884.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_21368.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_22077.jpg",
+      "expected_student": "EVA CABRAL"
+    },
+    {
+      "test_file": "JDV_22253.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_21886.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_21704.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_21946.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_21743.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_22127.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_21577.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_22256.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_22110.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_21360.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_22264.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_21907.jpg",
+      "expected_student": "GUSTAVO "
+    },
+    {
+      "test_file": "JDV_22133.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_22124.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_21961.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_21713.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_21714.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_21578.jpg",
+      "expected_student": "GABRIEL"
+    },
+    {
+      "test_file": "JDV_21694.jpg",
+      "expected_student": "HEITOR"
+    },
+    {
+      "test_file": "JDV_21960.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_21336.jpg",
+      "expected_student": "Grupo"
+    },
+    {
+      "test_file": "JDV_21964.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_21872.jpg",
+      "expected_student": "EDITE "
+    },
+    {
+      "test_file": "JDV_22128.jpg",
+      "expected_student": "ELODIE MARQUES DA SILVA"
+    },
+    {
+      "test_file": "JDV_21718.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_21945.jpg",
+      "expected_student": "ENZO"
+    },
+    {
+      "test_file": "JDV_21711.jpg",
+      "expected_student": "AURORA "
+    },
+    {
+      "test_file": "JDV_21966.jpg",
+      "expected_student": "DAVI VENANCIO"
+    },
+    {
+      "test_file": "JDV_22265.jpg",
+      "expected_student": "HEITOR"
+    }
+  ]
+}
