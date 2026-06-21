@@ -112,3 +112,6 @@ def _format_duration(seconds: float) -> str:
     if minutes:
         return f"{minutes}:{secs:02d}"
     return f"{secs}s"
+
+
+format_duration = _format_duration

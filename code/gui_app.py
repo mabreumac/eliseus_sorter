@@ -21,7 +21,7 @@ if __name__ == "__main__" and __package__ is None:
 import customtkinter as ctk
 
 from app_paths import ensure_app_support, is_app_bundle, load_settings, save_settings
-from branding import ACCENT_COLOR, ACCENT_HOVER, APP_NAME, APP_TAGLINE
+from branding import ACCENT_COLOR, ACCENT_HOVER, APP_NAME
 from config import (
     DEFAULT_FACE_SENSITIVITY,
     DEFAULT_INFERENCE_DEVICE,
@@ -39,7 +39,22 @@ from face_engine import (
 )
 from group_photos import GroupPhotoSettings
 from reporting import format_result_line
-from resource_monitor import format_resource_line, snapshot_process_tree
+from resource_monitor import format_duration, format_memory, snapshot_process_tree
+from ui_locale import (
+    DEFAULT_LANGUAGE,
+    LANGUAGE_BY_CODE,
+    LANGUAGE_BY_LABEL,
+    LANGUAGE_CHOICES,
+    LANGUAGE_LABELS,
+    Locale,
+    format_resource_line_localized,
+    friendly_step_detail,
+    get_locale,
+    inference_menu,
+    worker_label_for_count,
+    worker_labels,
+    worker_value_from_label,
+)
 
 APP_TITLE = APP_NAME
 WINDOW_SIZE = "720x900"
@@ -49,15 +64,6 @@ MUTED = ("gray45", "gray60")
 STEP_DONE = "#40916C"
 STEP_ACTIVE = ACCENT
 STEP_PENDING = ("gray78", "gray35")
-
-# Internal phase key → user-facing step (title, short description)
-PIPELINE_STEPS: tuple[tuple[str, str, str], ...] = (
-    ("scan", "Find faces", "Looking at each photo"),
-    ("cluster", "Group people", "Matching faces that belong together"),
-    ("naming", "Load names", "Reading your reference library"),
-    ("naming_match", "Apply names", "Labeling each group"),
-    ("sort", "Save photos", "Placing files in folders"),
-)
 
 PHASE_WEIGHTS_WITH_NAMING: dict[str, float] = {
     "scan": 0.50,
@@ -72,30 +78,10 @@ PHASE_WEIGHTS_NO_NAMING: dict[str, float] = {
     "sort": 0.25,
 }
 
-READY_HINT = (
-    "Choose input and output folders, then click Sort photos. "
-    "Progress appears here step by step."
-)
-
-SCAN_WORKER_CUSTOM_LABEL = "Custom…"
-SCAN_WORKER_CHOICES: tuple[tuple[str, int], ...] = (
-    ("1 — safe (default)", 1),
-    ("2 — balanced", 2),
-    ("3", 3),
-    ("4", 4),
-    ("5", 5),
-    ("6", 6),
-    ("7", 7),
-    ("8 — max preset", 8),
-    (SCAN_WORKER_CUSTOM_LABEL, -1),
-)
-SCAN_WORKER_LABELS = [label for label, _ in SCAN_WORKER_CHOICES]
-SCAN_WORKER_VALUES = {label: value for label, value in SCAN_WORKER_CHOICES}
-
 
 def _phase_order(has_naming_ref: bool) -> list[str]:
     if has_naming_ref:
-        return [key for key, _, _ in PIPELINE_STEPS]
+        return ["scan", "cluster", "naming", "naming_match", "sort"]
     return ["scan", "cluster", "sort"]
 
 
@@ -119,28 +105,6 @@ def _overall_progress(
     step_weight = weights.get(phase, 0.1)
     inner = min(current / total, 1.0) if total else 0.0
     return min(completed + step_weight * inner, 1.0)
-
-
-def _friendly_step_detail(phase: str, message: str, current: int, total: int) -> str:
-    if "cached reference" in message.lower():
-        return "Using saved name library — no re-scan needed"
-    if total > 0:
-        if phase == "scan":
-            count_line = f"Photo {current} of {total}"
-        elif phase == "sort":
-            count_line = f"File {current} of {total}"
-        elif phase in {"naming", "naming_match"}:
-            count_line = f"Name {current} of {total}"
-        else:
-            count_line = f"Step {current} of {total}"
-    else:
-        count_line = ""
-
-    if ": " in message:
-        tail = message.split(": ", 1)[-1].strip()
-        if tail and not tail.startswith("["):
-            return f"{count_line} · {tail}" if count_line else tail
-    return count_line or message
 
 
 class StepIndicator(ctk.CTkFrame):
@@ -210,8 +174,9 @@ class StepIndicator(ctk.CTkFrame):
 class SortProgressPanel(ctk.CTkFrame):
     """Step pipeline, overall bar, and plain-language status."""
 
-    def __init__(self, master: ctk.CTkBaseClass, **kwargs: object) -> None:
+    def __init__(self, master: ctk.CTkBaseClass, locale: Locale, **kwargs: object) -> None:
         super().__init__(master, corner_radius=12, **kwargs)
+        self._locale = locale
         self.grid_columnconfigure(0, weight=1)
         self._has_naming_ref = False
         self._move_files = False
@@ -223,7 +188,7 @@ class SortProgressPanel(ctk.CTkFrame):
         header.grid_columnconfigure(0, weight=1)
         self.headline = ctk.CTkLabel(
             header,
-            text="Ready to sort",
+            text=locale.t("ready_to_sort"),
             font=ctk.CTkFont(size=18, weight="bold"),
             anchor="w",
         )
@@ -252,7 +217,7 @@ class SortProgressPanel(ctk.CTkFrame):
 
         self.detail_label = ctk.CTkLabel(
             self,
-            text=READY_HINT,
+            text=locale.t("ready_hint"),
             font=ctk.CTkFont(size=12),
             text_color=MUTED,
             anchor="w",
@@ -276,13 +241,14 @@ class SortProgressPanel(ctk.CTkFrame):
 
         log_header = ctk.CTkFrame(self, fg_color="transparent")
         log_header.grid(row=6, column=0, padx=16, pady=(4, 4), sticky="ew")
-        ctk.CTkLabel(
+        self._log_title = ctk.CTkLabel(
             log_header,
-            text="Activity log",
+            text=locale.t("activity_log"),
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color=MUTED,
             anchor="w",
-        ).pack(side="left")
+        )
+        self._log_title.pack(side="left")
 
         self.log_box = ctk.CTkTextbox(self, font=ctk.CTkFont(size=12), height=140)
         self.log_box.grid(row=7, column=0, padx=16, pady=(0, 16), sticky="nsew")
@@ -290,14 +256,24 @@ class SortProgressPanel(ctk.CTkFrame):
 
         self._build_step_row(_phase_order(False))
 
+    def set_locale(self, locale: Locale) -> None:
+        self._locale = locale
+        self._log_title.configure(text=locale.t("activity_log"))
+        self.set_idle()
+
+    def _step_title(self, key: str) -> str:
+        title, _ = self._locale.pipeline_step(key)
+        if key == "sort" and self._move_files:
+            return self._locale.t("step_move_photos")
+        return title
+
     def _build_step_row(self, step_keys: list[str]) -> None:
         for widget in self.steps_row.winfo_children():
             widget.destroy()
         self._step_widgets.clear()
         self._step_keys = step_keys
-        titles = {key: title for key, title, _ in PIPELINE_STEPS}
         for index, key in enumerate(step_keys, start=1):
-            widget = StepIndicator(self.steps_row, number=index, title=titles.get(key, key))
+            widget = StepIndicator(self.steps_row, number=index, title=self._step_title(key))
             widget.pack(side="left", expand=True, fill="x", padx=4)
             self._step_widgets[key] = widget
 
@@ -308,39 +284,46 @@ class SortProgressPanel(ctk.CTkFrame):
             self._build_step_row(keys)
 
     def reset(self) -> None:
-        self.headline.configure(text="Preparing…")
+        loc = self._locale
+        self.headline.configure(text=loc.t("preparing"))
         self.percent_label.configure(text="0%")
-        self.step_caption.configure(text="Starting up — loading face recognition models")
-        self.detail_label.configure(text="This may take a moment on the first run.")
+        self.step_caption.configure(text=loc.t("preparing_caption"))
+        self.detail_label.configure(text=loc.t("preparing_detail"))
         self.progress.set(0)
         for key in self._step_keys:
             self._step_widgets[key].set_state("pending")
 
     def set_complete(self, *, message: str) -> None:
-        self.headline.configure(text="Complete")
+        loc = self._locale
+        self.headline.configure(text=loc.t("complete"))
         self.percent_label.configure(text="100%")
         self.progress.set(1.0)
         self.step_caption.configure(text=message)
-        self.detail_label.configure(text="See the activity log below for details.")
+        self.detail_label.configure(text=loc.t("complete_detail"))
         for key in self._step_keys:
             self._step_widgets[key].set_state("done")
 
     def set_idle(self) -> None:
-        self.headline.configure(text="Ready to sort")
+        loc = self._locale
+        self.headline.configure(text=loc.t("ready_to_sort"))
         self.percent_label.configure(text="")
         self.step_caption.configure(text="")
-        self.detail_label.configure(text=READY_HINT)
+        self.detail_label.configure(text=loc.t("ready_hint"))
         self.progress.set(0)
         self.resource_label.configure(text="")
         for key in self._step_keys:
             self._step_widgets[key].set_state("pending")
+        self._refresh_step_titles()
+
+    def _refresh_step_titles(self) -> None:
+        for key, widget in self._step_widgets.items():
+            widget.set_title(self._step_title(key))
 
     def update_phase(self, phase: str, current: int, total: int, message: str) -> None:
-        titles = {key: title for key, title, _ in PIPELINE_STEPS}
-        captions = {key: caption for key, _, caption in PIPELINE_STEPS}
-
-        if phase == "sort" and getattr(self, "_move_files", False):
-            titles["sort"] = "Move photos"
+        loc = self._locale
+        title, caption = loc.pipeline_step(phase)
+        if phase == "sort" and self._move_files:
+            title = loc.t("step_move_photos")
 
         order = _phase_order(self._has_naming_ref)
         if phase in order:
@@ -359,60 +342,57 @@ class SortProgressPanel(ctk.CTkFrame):
         percent = int(fraction * 100)
         self.progress.set(fraction)
         self.percent_label.configure(text=f"{percent}%")
-        self.headline.configure(text=titles.get(phase, "Working"))
-        self.step_caption.configure(text=captions.get(phase, ""))
-        self.detail_label.configure(text=_friendly_step_detail(phase, message, current, total))
+        self.headline.configure(text=title)
+        self.step_caption.configure(text=caption)
+        self.detail_label.configure(
+            text=friendly_step_detail(loc, phase, message, current, total)
+        )
 
     def set_move_mode(self, move_files: bool) -> None:
         self._move_files = move_files
-        if "sort" in self._step_widgets:
-            self._step_widgets["sort"].set_title("Move photos" if move_files else "Save photos")
+        self._refresh_step_titles()
 
 
-def _inference_device_menu_choices() -> tuple[list[str], dict[str, str], dict[str, str]]:
-    accelerators = available_accelerators()
-    options: list[tuple[str, str]] = [
-        ("Auto", "auto"),
-        ("CPU only", "cpu"),
-    ]
-    if accelerators["coreml"]:
-        options.append(("Apple GPU (CoreML)", "coreml"))
-    if accelerators["cuda"]:
-        options.append(("NVIDIA GPU (CUDA)", "cuda"))
-    labels = [label for label, _ in options]
-    label_to_value = {label: value for label, value in options}
-    value_to_label = {value: label for label, value in options}
-    return labels, label_to_value, value_to_label
+def _inference_device_menu_choices(locale: Locale) -> tuple[list[str], dict[str, str], dict[str, str]]:
+    return inference_menu(locale, available_accelerators())
 
 
 class PathSelector(ctk.CTkFrame):
     def __init__(
         self,
         master: ctk.CTkBaseClass,
-        label: str,
+        label_key: str,
+        locale: Locale,
         initial: Path | str = "",
         **kwargs: object,
     ) -> None:
         super().__init__(master, fg_color="transparent", **kwargs)
+        self._label_key = label_key
+        self._locale = locale
         self.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(self, text=label, width=120, anchor="w").grid(
-            row=0, column=0, padx=(0, 8), sticky="w"
-        )
+        self._path_label = ctk.CTkLabel(self, text=locale.t(label_key), width=120, anchor="w")
+        self._path_label.grid(row=0, column=0, padx=(0, 8), sticky="w")
         self._var = tk.StringVar(value=str(initial))
         self.entry = ctk.CTkEntry(self, textvariable=self._var)
         self.entry.grid(row=0, column=1, sticky="ew", padx=(0, 8))
-        ctk.CTkButton(
+        self._browse_btn = ctk.CTkButton(
             self,
-            text="Browse…",
+            text=locale.t("browse"),
             width=90,
             command=self._browse,
             fg_color=ACCENT,
             hover_color=ACCENT_HOVER,
-        ).grid(row=0, column=2)
+        )
+        self._browse_btn.grid(row=0, column=2)
+
+    def set_locale(self, locale: Locale) -> None:
+        self._locale = locale
+        self._path_label.configure(text=locale.t(self._label_key))
+        self._browse_btn.configure(text=locale.t("browse"))
 
     def _browse(self) -> None:
         chosen = filedialog.askdirectory(
-            title="Select folder",
+            title=self._locale.t("folder_dialog_title"),
             initialdir=self.path.parent if self.path.exists() else Path.home(),
         )
         if chosen:
@@ -437,6 +417,9 @@ class EliseusSorterApp(ctk.CTk):
             ensure_app_support()
 
         self._settings = load_settings()
+        self._locale = get_locale(self._settings.get("language", DEFAULT_LANGUAGE))
+        self._inference_device_value = DEFAULT_INFERENCE_DEVICE
+        self._scan_worker_count = DEFAULT_SCAN_WORKERS
         self._cancel_event = threading.Event()
         self._worker: Optional[threading.Thread] = None
         self._monitor_stop = threading.Event()
@@ -446,7 +429,64 @@ class EliseusSorterApp(ctk.CTk):
         self._ui_queue: queue.Queue = queue.Queue()
 
         self._build_layout()
+        self._apply_language()
         self._poll_ui_queue()
+
+    def _apply_language(self) -> None:
+        loc = self._locale
+        self.tagline_label.configure(text=loc.t("tagline"))
+        self.input_dir.set_locale(loc)
+        self.output_dir.set_locale(loc)
+        self.naming_reference_dir.set_locale(loc)
+        self.ref_skip_label.configure(text=loc.t("label_ref_skip"))
+        self.ref_skip_hint.configure(text=loc.t("hint_ref_skip"))
+        self.group_faces_label.configure(text=loc.t("label_group_faces"))
+        self.group_faces_hint.configure(text=loc.t("hint_group_faces"))
+        self.move_files_checkbox.configure(text=loc.t("move_files"))
+        self.duplicate_group_checkbox.configure(text=loc.t("duplicate_group"))
+        self.bg_sensitivity_label.configure(text=loc.t("label_bg_sensitivity"))
+        self.workers_label.configure(text=loc.t("label_scan_workers"))
+        self.workers_hint.configure(text=loc.t("hint_scan_workers"))
+        self.accel_label.configure(text=loc.t("label_acceleration"))
+        self._refresh_accel_hint()
+        self.sort_btn.configure(text=loc.t("btn_sort"))
+        self.cancel_btn.configure(text=loc.t("btn_cancel"))
+        self.progress_panel.set_locale(loc)
+        self._refresh_worker_menu()
+        self._refresh_inference_menu()
+        self._update_face_sensitivity_label(self.face_sensitivity_var.get())
+
+    def _refresh_accel_hint(self) -> None:
+        loc = self._locale
+        if available_accelerators()["coreml"]:
+            hint = loc.t("accel_hint_coreml")
+        elif available_accelerators()["cuda"]:
+            hint = loc.t("accel_hint_cuda")
+        else:
+            hint = loc.t("accel_hint_cpu")
+        self.accel_hint.configure(text=hint)
+
+    def _refresh_worker_menu(self) -> None:
+        loc = self._locale
+        labels = worker_labels(loc)
+        self.scan_workers_menu.configure(values=labels)
+        self.scan_workers_var.set(worker_label_for_count(loc, self._scan_worker_count))
+
+    def _refresh_inference_menu(self) -> None:
+        loc = self._locale
+        labels, label_to_value, value_to_label = _inference_device_menu_choices(loc)
+        self.inference_device_labels = labels
+        self.inference_device_values = label_to_value
+        self.inference_device_by_value = value_to_label
+        self.inference_device_menu.configure(values=labels)
+        self.inference_device_var.set(value_to_label.get(self._inference_device_value, labels[0]))
+
+    def _on_language_changed(self, choice: str) -> None:
+        code = LANGUAGE_BY_LABEL.get(choice, DEFAULT_LANGUAGE)
+        self._locale = get_locale(code)
+        self._apply_language()
+        if not (self._worker and self._worker.is_alive()):
+            self._persist_settings()
 
     def _build_layout(self) -> None:
         self.grid_columnconfigure(0, weight=1)
@@ -454,41 +494,56 @@ class EliseusSorterApp(ctk.CTk):
 
         header = ctk.CTkFrame(self, corner_radius=12)
         header.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
+        header.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
             header, text=APP_TITLE, font=ctk.CTkFont(size=26, weight="bold")
         ).grid(row=0, column=0, padx=20, pady=(16, 4), sticky="w")
-        ctk.CTkLabel(
+        self.tagline_label = ctk.CTkLabel(
             header,
-            text=APP_TAGLINE,
+            text="",
             font=ctk.CTkFont(size=13),
             text_color=("gray30", "gray70"),
-            wraplength=660,
+            wraplength=520,
             justify="left",
-        ).grid(row=1, column=0, padx=20, pady=(0, 16), sticky="w")
+        )
+        self.tagline_label.grid(row=1, column=0, padx=20, pady=(0, 16), sticky="w")
+
+        lang_code = self._settings.get("language", DEFAULT_LANGUAGE)
+        lang_label = LANGUAGE_BY_CODE.get(lang_code, LANGUAGE_LABELS[0])
+        self.language_var = tk.StringVar(value=lang_label)
+        self.language_menu = ctk.CTkOptionMenu(
+            header,
+            variable=self.language_var,
+            values=LANGUAGE_LABELS,
+            width=130,
+            command=self._on_language_changed,
+        )
+        self.language_menu.grid(row=0, column=1, rowspan=2, padx=20, pady=16, sticky="ne")
 
         paths = ctk.CTkFrame(self, corner_radius=12)
         paths.grid(row=1, column=0, padx=20, pady=8, sticky="ew")
         paths.grid_columnconfigure(0, weight=1)
+        loc = self._locale
         self.input_dir = PathSelector(
-            paths, "Input", self._settings.get("input_dir", "")
+            paths, "label_input", loc, self._settings.get("input_dir", "")
         )
         self.input_dir.grid(row=0, column=0, padx=16, pady=(16, 6), sticky="ew")
         self.output_dir = PathSelector(
-            paths, "Output", self._settings.get("output_dir", "")
+            paths, "label_output", loc, self._settings.get("output_dir", "")
         )
         self.output_dir.grid(row=1, column=0, padx=16, pady=(6, 6), sticky="ew")
         self.naming_reference_dir = PathSelector(
             paths,
-            "Naming ref",
+            "label_naming_ref",
+            loc,
             self._settings.get("naming_reference", ""),
         )
         self.naming_reference_dir.grid(row=2, column=0, padx=16, pady=(6, 6), sticky="ew")
 
         naming_skip_row = ctk.CTkFrame(paths, fg_color="transparent")
         naming_skip_row.grid(row=3, column=0, padx=16, pady=(0, 6), sticky="ew")
-        ctk.CTkLabel(naming_skip_row, text="Ref folder skip", width=120, anchor="w").grid(
-            row=0, column=0, sticky="w"
-        )
+        self.ref_skip_label = ctk.CTkLabel(naming_skip_row, text="", width=120, anchor="w")
+        self.ref_skip_label.grid(row=0, column=0, sticky="w")
         self.naming_reference_skip_var = tk.StringVar(
             value=str(
                 self._settings.get("naming_reference_skip", DEFAULT_NAMING_REFERENCE_SKIP)
@@ -498,30 +553,31 @@ class EliseusSorterApp(ctk.CTk):
             naming_skip_row, textvariable=self.naming_reference_skip_var, width=80
         )
         self.naming_reference_skip_entry.grid(row=0, column=1, sticky="w", padx=(0, 8))
-        ctk.CTkLabel(
+        self.ref_skip_hint = ctk.CTkLabel(
             naming_skip_row,
-            text="Folder levels up from each photo to the identity label (0 = folder that holds the image)",
+            text="",
             font=ctk.CTkFont(size=12),
             text_color=("gray30", "gray70"),
-        ).grid(row=0, column=2, sticky="w")
+        )
+        self.ref_skip_hint.grid(row=0, column=2, sticky="w")
 
         class_row = ctk.CTkFrame(paths, fg_color="transparent")
         class_row.grid(row=4, column=0, padx=16, pady=(0, 6), sticky="ew")
-        ctk.CTkLabel(class_row, text="Group if faces >", width=120, anchor="w").grid(
-            row=0, column=0, sticky="w"
-        )
+        self.group_faces_label = ctk.CTkLabel(class_row, text="", width=120, anchor="w")
+        self.group_faces_label.grid(row=0, column=0, sticky="w")
         self.min_class_faces_var = tk.StringVar(
             value=str(self._settings.get("min_class_faces", DEFAULT_MIN_CLASS_FACES))
         )
         ctk.CTkEntry(class_row, textvariable=self.min_class_faces_var, width=80).grid(
             row=0, column=1, sticky="w", padx=(0, 8)
         )
-        ctk.CTkLabel(
+        self.group_faces_hint = ctk.CTkLabel(
             class_row,
-            text="Large group images seed roster clusters; all nested folders = one photo pool",
+            text="",
             font=ctk.CTkFont(size=12),
             text_color=("gray30", "gray70"),
-        ).grid(row=0, column=2, sticky="w")
+        )
+        self.group_faces_hint.grid(row=0, column=2, sticky="w")
 
         transfer_row = ctk.CTkFrame(paths, fg_color="transparent")
         transfer_row.grid(row=5, column=0, padx=16, pady=(0, 6), sticky="ew")
@@ -530,7 +586,7 @@ class EliseusSorterApp(ctk.CTk):
         )
         self.move_files_checkbox = ctk.CTkCheckBox(
             transfer_row,
-            text="Move files (leave empty source folders; unchecked = copy)",
+            text="",
             variable=self.move_files_var,
         )
         self.move_files_checkbox.grid(row=0, column=0, sticky="w")
@@ -542,7 +598,7 @@ class EliseusSorterApp(ctk.CTk):
         )
         self.duplicate_group_checkbox = ctk.CTkCheckBox(
             options_row,
-            text="Duplicate group photos into person folders",
+            text="",
             variable=self.duplicate_group_photos_var,
         )
         self.duplicate_group_checkbox.grid(row=0, column=0, sticky="w")
@@ -550,9 +606,10 @@ class EliseusSorterApp(ctk.CTk):
         sensitivity_row = ctk.CTkFrame(paths, fg_color="transparent")
         sensitivity_row.grid(row=7, column=0, padx=16, pady=(0, 6), sticky="ew")
         sensitivity_row.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(sensitivity_row, text="Background face sensitivity", width=160, anchor="w").grid(
-            row=0, column=0, sticky="w"
+        self.bg_sensitivity_label = ctk.CTkLabel(
+            sensitivity_row, text="", width=160, anchor="w"
         )
+        self.bg_sensitivity_label.grid(row=0, column=0, sticky="w")
         saved_sensitivity = int(
             self._settings.get("face_sensitivity", DEFAULT_FACE_SENSITIVITY)
         )
@@ -580,24 +637,18 @@ class EliseusSorterApp(ctk.CTk):
 
         workers_row = ctk.CTkFrame(paths, fg_color="transparent")
         workers_row.grid(row=8, column=0, padx=16, pady=(0, 6), sticky="ew")
-        ctk.CTkLabel(workers_row, text="Scan workers", width=120, anchor="w").grid(
-            row=0, column=0, sticky="w"
-        )
+        self.workers_label = ctk.CTkLabel(workers_row, text="", width=120, anchor="w")
+        self.workers_label.grid(row=0, column=0, sticky="w")
         saved_workers = int(self._settings.get("scan_workers", DEFAULT_SCAN_WORKERS))
         saved_workers = max(1, saved_workers)
-        if saved_workers in SCAN_WORKER_VALUES.values():
-            default_label = next(
-                label for label, value in SCAN_WORKER_CHOICES if value == saved_workers
-            )
-            custom_workers = ""
-        else:
-            default_label = SCAN_WORKER_CUSTOM_LABEL
-            custom_workers = str(saved_workers)
+        self._scan_worker_count = saved_workers
+        default_label = worker_label_for_count(loc, saved_workers)
+        custom_workers = "" if saved_workers in {1, 2, 3, 4, 5, 6, 7, 8} else str(saved_workers)
         self.scan_workers_var = tk.StringVar(value=default_label)
         self.scan_workers_menu = ctk.CTkOptionMenu(
             workers_row,
             variable=self.scan_workers_var,
-            values=SCAN_WORKER_LABELS,
+            values=worker_labels(loc),
             width=180,
             command=self._on_scan_workers_menu_changed,
         )
@@ -611,51 +662,47 @@ class EliseusSorterApp(ctk.CTk):
         )
         self.scan_workers_custom_entry.grid(row=0, column=2, sticky="w", padx=(0, 8))
         self._on_scan_workers_menu_changed(default_label)
-        ctk.CTkLabel(
+        self.workers_hint = ctk.CTkLabel(
             workers_row,
-            text="More workers = faster scan, more RAM (~200 MB per extra worker)",
+            text="",
             font=ctk.CTkFont(size=12),
             text_color=("gray30", "gray70"),
-        ).grid(row=0, column=3, sticky="w")
+        )
+        self.workers_hint.grid(row=0, column=3, sticky="w")
 
         accel_row = ctk.CTkFrame(paths, fg_color="transparent")
         accel_row.grid(row=9, column=0, padx=16, pady=(0, 6), sticky="ew")
-        ctk.CTkLabel(accel_row, text="Acceleration", width=120, anchor="w").grid(
-            row=0, column=0, sticky="w"
-        )
+        self.accel_label = ctk.CTkLabel(accel_row, text="", width=120, anchor="w")
+        self.accel_label.grid(row=0, column=0, sticky="w")
         (
             self.inference_device_labels,
             self.inference_device_values,
             self.inference_device_by_value,
-        ) = _inference_device_menu_choices()
+        ) = _inference_device_menu_choices(loc)
         saved_device = str(
             self._settings.get("inference_device", DEFAULT_INFERENCE_DEVICE)
         ).lower()
         if saved_device not in self.inference_device_by_value:
             saved_device = DEFAULT_INFERENCE_DEVICE
+        self._inference_device_value = saved_device
         self.inference_device_var = tk.StringVar(
-            value=self.inference_device_by_value.get(saved_device, "Auto")
+            value=self.inference_device_by_value.get(saved_device, self.inference_device_labels[0])
         )
         self.inference_device_menu = ctk.CTkOptionMenu(
             accel_row,
             variable=self.inference_device_var,
             values=self.inference_device_labels,
             width=180,
+            command=self._on_inference_device_changed,
         )
         self.inference_device_menu.grid(row=0, column=1, sticky="w", padx=(0, 8))
-        accel_hint = "Uses Apple/NVIDIA GPU when available (Auto)"
-        if available_accelerators()["coreml"]:
-            accel_hint = "Apple GPU (CoreML) available — Auto uses it"
-        elif available_accelerators()["cuda"]:
-            accel_hint = "NVIDIA GPU (CUDA) available — Auto uses it"
-        else:
-            accel_hint = "No GPU backend detected — CPU only on this Mac"
-        ctk.CTkLabel(
+        self.accel_hint = ctk.CTkLabel(
             accel_row,
-            text=accel_hint,
+            text="",
             font=ctk.CTkFont(size=12),
             text_color=("gray30", "gray70"),
-        ).grid(row=0, column=2, sticky="w")
+        )
+        self.accel_hint.grid(row=0, column=2, sticky="w")
 
         actions = ctk.CTkFrame(paths, fg_color="transparent")
         actions.grid(row=10, column=0, padx=16, pady=(0, 16), sticky="ew")
@@ -663,7 +710,7 @@ class EliseusSorterApp(ctk.CTk):
         actions.grid_columnconfigure(1, weight=1)
         self.sort_btn = ctk.CTkButton(
             actions,
-            text="Sort photos",
+            text="",
             command=self._start_sort,
             fg_color="#1B4332",
             hover_color=ACCENT,
@@ -671,14 +718,14 @@ class EliseusSorterApp(ctk.CTk):
         self.sort_btn.grid(row=0, column=0, padx=(0, 4), sticky="ew")
         self.cancel_btn = ctk.CTkButton(
             actions,
-            text="Cancel",
+            text="",
             command=self._request_cancel,
             state="disabled",
             fg_color="#6C757D",
         )
         self.cancel_btn.grid(row=0, column=1, padx=(4, 0), sticky="ew")
 
-        progress = SortProgressPanel(self)
+        progress = SortProgressPanel(self, self._locale)
         progress.grid(row=2, column=0, padx=20, pady=(8, 20), sticky="nsew")
         self.progress_panel = progress
         self.progress = progress.progress
@@ -692,61 +739,67 @@ class EliseusSorterApp(ctk.CTk):
         try:
             value = int(self.min_class_faces_var.get().strip())
         except ValueError as exc:
-            raise ValueError("Group face threshold must be a whole number.") from exc
+            raise ValueError(self._locale.t("error_group_faces_int")) from exc
         if value < 1:
-            raise ValueError("Group face threshold must be at least 1.")
+            raise ValueError(self._locale.t("error_group_faces_min"))
         return value
 
     def _naming_reference_skip(self) -> int:
         try:
             value = int(self.naming_reference_skip_var.get().strip())
         except ValueError as exc:
-            raise ValueError("Ref folder skip must be a whole number.") from exc
+            raise ValueError(self._locale.t("error_ref_skip_int")) from exc
         if value < 0:
-            raise ValueError("Ref folder skip must be 0 or greater.")
+            raise ValueError(self._locale.t("error_ref_skip_min"))
         return value
 
     def _update_face_sensitivity_label(self, value: float | str = 0) -> None:
         level = int(float(value))
+        loc = self._locale
         if level <= 33:
-            hint = "strict — ignore distant background faces"
+            hint = loc.t("sensitivity_strict")
         elif level >= 67:
-            hint = "permissive — keep smaller background faces"
+            hint = loc.t("sensitivity_permissive")
         else:
-            hint = "balanced"
+            hint = loc.t("sensitivity_balanced")
         self.face_sensitivity_label.configure(text=f"{level} · {hint}")
 
     def _on_scan_workers_menu_changed(self, choice: str) -> None:
-        is_custom = choice == SCAN_WORKER_CUSTOM_LABEL
+        self._scan_worker_count = worker_value_from_label(self._locale, choice)
+        is_custom = self._scan_worker_count < 0
         state = "normal" if is_custom else "disabled"
         self.scan_workers_custom_entry.configure(state=state)
+
+    def _on_inference_device_changed(self, choice: str) -> None:
+        self._inference_device_value = self.inference_device_values.get(
+            choice, DEFAULT_INFERENCE_DEVICE
+        )
 
     def _face_sensitivity(self) -> int:
         return max(0, min(100, int(self.face_sensitivity_var.get())))
 
     def _scan_workers(self) -> int:
         label = self.scan_workers_var.get()
-        preset = SCAN_WORKER_VALUES.get(label, DEFAULT_SCAN_WORKERS)
+        preset = worker_value_from_label(self._locale, label)
         if preset >= 1:
             return preset
         try:
             value = int(self.scan_workers_custom_var.get().strip())
         except ValueError as exc:
-            raise ValueError("Custom scan workers must be a whole number.") from exc
+            raise ValueError(self._locale.t("error_workers_int")) from exc
         if value < 1:
-            raise ValueError("Scan workers must be at least 1.")
+            raise ValueError(self._locale.t("error_workers_min"))
         return value
 
     def _inference_device(self) -> str:
-        label = self.inference_device_var.get()
-        return self.inference_device_values.get(label, DEFAULT_INFERENCE_DEVICE)
+        return self._inference_device_value
 
     def _naming_reference_path(self) -> Optional[Path]:
         raw = self.naming_reference_dir.path
         if not str(raw).strip():
             return None
         if not raw.is_dir():
-            raise ValueError("Naming reference folder does not exist.")
+            raise ValueError(self._locale.t("error_naming_ref"))
         return raw
 
     def _sort_config(self) -> "SortConfig":
@@ -781,6 +834,7 @@ class EliseusSorterApp(ctk.CTk):
                 "face_sensitivity": self._face_sensitivity(),
                 "scan_workers": self._scan_workers(),
                 "inference_device": self._inference_device(),
+                "language": self._locale.code,
             }
         )
 
@@ -795,11 +849,12 @@ class EliseusSorterApp(ctk.CTk):
         self.move_files_checkbox.configure(state=state)
         self.face_sensitivity_slider.configure(state=state)
         self.scan_workers_menu.configure(state=state)
-        if self.scan_workers_var.get() == SCAN_WORKER_CUSTOM_LABEL:
+        if self.scan_workers_var.get() == self._locale.t("worker_custom"):
             self.scan_workers_custom_entry.configure(state=state)
         else:
             self.scan_workers_custom_entry.configure(state="disabled")
         self.inference_device_menu.configure(state=state)
+        self.language_menu.configure(state=state)
         self.cancel_btn.configure(state="normal" if running else "disabled")
 
     def _request_cancel(self) -> None:
@@ -831,10 +886,10 @@ class EliseusSorterApp(ctk.CTk):
 
     def _update_progress(self, phase: str, current: int, total: int, message: str) -> None:
         if phase != self._last_progress_phase:
-            titles = {key: title for key, title, _ in PIPELINE_STEPS}
+            title, _ = self._locale.pipeline_step(phase)
             if phase == "sort" and getattr(self.progress_panel, "_move_files", False):
-                titles["sort"] = "Move photos"
-            self._append_log(f"▸ {titles.get(phase, 'Working')}")
+                title = self._locale.t("step_move_photos")
+            self._append_log(f"▸ {title}")
             self._last_progress_phase = phase
         self.progress_panel.update_phase(phase, current, total, message)
 
@@ -844,23 +899,29 @@ class EliseusSorterApp(ctk.CTk):
         elapsed = time.perf_counter() - self._sort_started_at
         snap = snapshot_process_tree()
         self.resource_label.configure(
-            text=format_resource_line(
-                snap,
+            text=format_resource_line_localized(
+                self._locale,
+                memory_mb=snap.memory_mb,
+                cpu_percent=snap.cpu_percent,
                 scan_workers=self._active_scan_workers,
                 elapsed_seconds=elapsed,
                 inference=active_inference_label(),
+                process_count=snap.process_count,
+                format_memory=format_memory,
+                format_duration=format_duration,
             )
         )
 
     def _start_sort(self) -> None:
+        loc = self._locale
         if self._worker and self._worker.is_alive():
-            messagebox.showwarning(APP_TITLE, "Already running.")
+            messagebox.showwarning(APP_TITLE, loc.t("error_already_running"))
             return
         if not self.input_dir.path.is_dir():
-            messagebox.showerror(APP_TITLE, "Input folder does not exist.")
+            messagebox.showerror(APP_TITLE, loc.t("error_input_missing"))
             return
         if not self.output_dir.path:
-            messagebox.showerror(APP_TITLE, "Choose an output folder.")
+            messagebox.showerror(APP_TITLE, loc.t("error_output_missing"))
             return
 
         try:
@@ -885,7 +946,7 @@ class EliseusSorterApp(ctk.CTk):
         self._last_progress_phase = None
         self._set_running(True)
         self.resource_label.configure(
-            text=f"Loading models ({active_inference_label()})…"
+            text=loc.t("loading_models", device=active_inference_label())
         )
         self.log_box.delete("1.0", "end")
         self._worker = threading.Thread(
@@ -914,29 +975,44 @@ class EliseusSorterApp(ctk.CTk):
             self._monitor_stop.set()
 
     def _format_runtime(self, runtime: object) -> str:
-        return (
-            f"Timing — scan {runtime.scan_seconds:.1f}s, "
-            f"cluster {runtime.cluster_seconds:.1f}s, "
-            f"copy {runtime.copy_seconds:.1f}s · "
-            f"{runtime.num_faces_detected} faces in "
-            f"{runtime.num_images_with_face}/{runtime.num_images} images"
+        return self._locale.t(
+            "log_timing",
+            scan=runtime.scan_seconds,
+            cluster=runtime.cluster_seconds,
+            copy=runtime.copy_seconds,
+            faces=runtime.num_faces_detected,
+            with_face=runtime.num_images_with_face,
+            images=runtime.num_images,
         )
 
     def _log_result(self, result: object) -> None:
-        self._append_log(f"Output: {result.output_dir}")
+        loc = self._locale
+        self._append_log(loc.t("log_output", path=result.output_dir))
         if result.num_classes:
-            self._append_log(f"Roster groups: {result.num_classes}")
-        self._append_log(f"Person clusters: {result.num_clusters}")
-        self._append_log(
-            f"{'Moves' if getattr(self, '_active_move_files', False) else 'Copies'}: "
-            f"{result.matched_count} matched, {result.unmatched_count} unmatched"
-        )
+            self._append_log(loc.t("log_roster_groups", count=result.num_classes))
+        self._append_log(loc.t("log_person_clusters", count=result.num_clusters))
+        if getattr(self, "_active_move_files", False):
+            self._append_log(
+                loc.t(
+                    "log_moves",
+                    matched=result.matched_count,
+                    unmatched=result.unmatched_count,
+                )
+            )
+        else:
+            self._append_log(
+                loc.t(
+                    "log_copies",
+                    matched=result.matched_count,
+                    unmatched=result.unmatched_count,
+                )
+            )
         if result.log_path:
-            self._append_log(f"Log: {result.log_path}")
+            self._append_log(loc.t("log_file", path=result.log_path))
         if getattr(result, "runtime", None):
             self._append_log(self._format_runtime(result.runtime))
         if result.person_renames:
-            self._append_log("Person names:")
+            self._append_log(loc.t("log_person_names"))
             for generic, named in sorted(result.person_renames.items()):
                 self._append_log(f"  {generic} → {named}")
 
@@ -948,22 +1024,22 @@ class EliseusSorterApp(ctk.CTk):
 
         self._set_running(False)
         self._sort_started_at = None
-        verb = "moved" if move_files else "copied"
-        finish_text = f"All done — photos were {verb} into the output folder."
-        if move_files:
-            finish_text += " Empty source folders may remain."
-        else:
-            finish_text += " Your original input folder was left unchanged."
+        finish_text = (
+            self._locale.t("finish_moved")
+            if move_files
+            else self._locale.t("finish_copied")
+        )
         self.progress_panel.set_complete(message=finish_text)
         self._update_resources()
 
     def _finish_error(self, message: str) -> None:
+        loc = self._locale
         self._append_log(f"ERROR: {message}")
         self._set_running(False)
         self._sort_started_at = None
-        self.progress_panel.headline.configure(text="Something went wrong")
+        self.progress_panel.headline.configure(text=loc.t("error_headline"))
         self.progress_panel.percent_label.configure(text="")
-        self.progress_panel.step_caption.configure(text="The sort did not finish.")
+        self.progress_panel.step_caption.configure(text=loc.t("error_caption"))
         self.progress_panel.detail_label.configure(text=message)
         self.resource_label.configure(text="")
         messagebox.showerror(APP_TITLE, message)
