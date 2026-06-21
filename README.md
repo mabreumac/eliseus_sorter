@@ -165,3 +165,7 @@ All inference and file operations run locally. Images are not transmitted to ext
 ---
 
 Development, CLI, and benchmarks: [DEVELOPING.md](DEVELOPING.md).
+
+---
+
+Built with assistance from [Cursor](https://cursor.com).
