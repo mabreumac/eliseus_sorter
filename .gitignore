@@ -13,7 +13,7 @@ __pycache__/
 data/**/*
 !data/.gitkeep
 results/**/*
-!results/.gitkeep
+results/
 logs/**/*
 !logs/.gitkeep
 
