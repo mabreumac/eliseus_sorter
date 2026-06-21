@@ -105,13 +105,14 @@ With **Duplicate group photos** unchecked (default), multi-face photos go only t
 
 | Issue | Fix |
 |-------|-----|
-| App won’t open | Right-click → **Open** → **Open**; see `~/Library/Application Support/Eliseus Sorter/logs/app.log` |
-| Setup failed | See `~/Library/Application Support/Eliseus Sorter/logs/install.log` |
+| App won’t open | Right-click → **Open** → **Open**; see **`logs/app.log`** in the project folder |
+| Setup failed | See **`logs/install.log`** in the project folder |
 | Missing Python / Tkinter | Install Python 3.12 from python.org, or run `brew install python@3.12 python-tk@3.12` and open the app again |
 | Slow first sort | Normal — face models download once (~100 MB) |
 | Wrong student names | Check naming ref layout and **Ref folder skip** |
 
-Settings and logs: `~/Library/Application Support/Eliseus Sorter/`
+Settings: `~/Library/Application Support/Eliseus Sorter/`  
+Logs: **`logs/`** in the project folder (same folder as `installer.command`)
 
 ---
 

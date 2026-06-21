@@ -5,8 +5,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=paths.sh
 source "${SCRIPT_DIR}/paths.sh"
-LOG_FILE="${PROJECT_ROOT}/install.log"
+LOG_FILE="${INSTALL_LOG}"
 PYTHON="${PYTHON:-}"
+
+mkdir -p "${LOG_DIR}"
+register_repo_root "${REPO_ROOT}"
 
 info()  { printf '\n\033[1;34m▸ %s\033[0m\n' "$1"; }
 ok()    { printf '  \033[1;32m✓ %s\033[0m\n' "$1"; }
@@ -211,7 +214,7 @@ ok "Python packages installed"
 
 info "Verifying installation"
 if ! python "${PROJECT_ROOT}/code/verify_install.py"; then
-  fail "Installation verification failed. See messages above and install.log"
+  fail "Installation verification failed. See ${LOG_FILE}"
 fi
 ok "Verification passed"
 

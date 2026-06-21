@@ -2,7 +2,6 @@
 __pycache__/
 *.py[cod]
 .DS_Store
-install.log
 
 # App icons (keep macos/ assets)
 *.png
@@ -15,6 +14,8 @@ data/**/*
 !data/.gitkeep
 results/**/*
 !results/.gitkeep
+logs/**/*
+!logs/.gitkeep
 
 *.jpg
 *.jpeg

@@ -19,8 +19,26 @@ def project_root() -> Path:
 
 
 def app_support_dir() -> Path:
-    """App-only files: venv, reference DB, settings, logs. Never user photos."""
+    """App-only files: venv, settings. Never user photos."""
     return Path.home() / "Library/Application Support/Eliseus Sorter"
+
+
+def repo_root() -> Path:
+    if raw := os.environ.get("ELISEUS_REPO_ROOT"):
+        return Path(raw)
+    marker = app_support_dir() / "repo_root"
+    if marker.is_file():
+        return Path(marker.read_text(encoding="utf-8").strip())
+    root = project_root()
+    if (root / "installer.command").is_file():
+        return root
+    return root
+
+
+def logs_dir() -> Path:
+    if raw := os.environ.get("ELISEUS_LOG_DIR"):
+        return Path(raw)
+    return repo_root() / "logs"
 
 
 def default_reference_db() -> Path:
@@ -58,4 +76,4 @@ def save_settings(settings: dict[str, Any]) -> None:
 
 def ensure_app_support() -> None:
     app_support_dir().mkdir(parents=True, exist_ok=True)
-    (app_support_dir() / "logs").mkdir(parents=True, exist_ok=True)
+    logs_dir().mkdir(parents=True, exist_ok=True)

@@ -45,7 +45,7 @@ if ! python "${SCRIPT_DIR}/verify_runtime.py"; then
   echo ""
   echo "Installation verification failed."
   echo "Run: bash code/install.sh"
-  echo "Details: install.log"
+  echo "Details: logs/install.log in the project folder"
   echo ""
   exit 1
 fi

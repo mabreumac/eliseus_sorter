@@ -27,6 +27,11 @@ echo ""
 bash "${ROOT}/code/build_mac_app.sh"
 APP_DEST="${HOME}/Applications/${APP_NAME}.app"
 
+# shellcheck source=code/paths.sh
+source "${ROOT}/code/paths.sh"
+register_repo_root "${ROOT}"
+echo "  Logs: ${LOG_DIR}"
+
 if [[ ! -d "${APP_DEST}" ]]; then
   echo "Build failed — app not found in Applications." >&2
   read -r -p "Press Enter to close… " _

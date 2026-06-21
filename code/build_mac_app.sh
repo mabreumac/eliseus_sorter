@@ -2,6 +2,9 @@
 # Build Eliseus Sorter.app for release (production code only).
 set -euo pipefail
 
+# Ignore app-launch environment when building from the git repo.
+unset ELISEUS_SORTER_APP ELISEUS_PROJECT_ROOT ELISEUS_REPO_ROOT ELISEUS_LOG_DIR ELISEUS_VENV_DIR || true
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 MACOS_DIR="${PROJECT_ROOT}/macos"
@@ -32,8 +35,13 @@ info() { printf '\n▸ %s\n' "$1"; }
 info "Building ${APP_NAME}.app (${APP_VERSION})"
 bash "${MACOS_DIR}/build_icon.sh"
 
+# shellcheck source=paths.sh
+source "${SCRIPT_DIR}/paths.sh"
+register_repo_root "${PROJECT_ROOT}"
+
 rm -rf "${APP_PATH}"
 mkdir -p "${APP_PATH}/Contents/MacOS"
+mkdir -p "${APP_PATH}/Contents/Resources"
 mkdir -p "${APP_PATH}/Contents/Resources/code"
 
 cp "${MACOS_DIR}/Info.plist" "${APP_PATH}/Contents/Info.plist"
