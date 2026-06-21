@@ -29,11 +29,14 @@ def effective_scan_workers(requested: int | None = None) -> int:
     return max(1, min(workers, 4, cpu))
 
 
-def _init_scan_worker(worker_count: int) -> None:
+def init_scan_worker(worker_count: int) -> None:
     from face_engine import configure_cpu_threads, get_face_analysis
 
     configure_cpu_threads(worker_count)
     get_face_analysis()
+
+
+_init_scan_worker = init_scan_worker  # backwards compatible
 
 
 def _scan_image_worker(args: tuple[str, str]) -> tuple[str, list[tuple[int, int, list[float]]], Optional[str]]:
@@ -93,7 +96,7 @@ def scan_all_images(
 
     with ProcessPoolExecutor(
         max_workers=worker_count,
-        initializer=_init_scan_worker,
+        initializer=init_scan_worker,
         initargs=(worker_count,),
     ) as pool:
         futures = [pool.submit(_scan_image_worker, payload) for payload in payloads]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
@@ -11,13 +12,13 @@ import numpy as np
 
 from config import MATCH_TOLERANCE
 from embeddings import cosine_similarity, encode_faces_from_path, normalize_embedding
+from face_scan import CancelCallback, ProgressCallback, effective_scan_workers, init_scan_worker
 from group_photos import GroupPhotoMode, is_group_reference_folder
 from image_utils import iter_images_recursive
 
 logger = logging.getLogger(__name__)
 
 ClusterKey = tuple[Optional[str], int]  # (class_folder or None, cluster_index)
-ProgressCallback = Callable[[str, int, int, str], None]
 
 
 @dataclass
@@ -75,6 +76,30 @@ def _first_single_face_in_folder(
     return None, None
 
 
+def _index_folder_worker(
+    args: tuple[str, str],
+) -> tuple[str, Optional[list[float]], Optional[str], int, int]:
+    """Find the first single-face reference photo in one student folder."""
+    name, folder_str = args
+    folder = Path(folder_str)
+    skipped_no_face = 0
+    skipped_multi_face = 0
+    for image_path in iter_images_recursive(folder):
+        encoded = encode_faces_from_path(image_path, GroupPhotoMode.FIRST_FACE)
+        if encoded.error:
+            continue
+        if encoded.num_faces == 0:
+            skipped_no_face += 1
+            continue
+        if encoded.num_faces > 1:
+            skipped_multi_face += 1
+            continue
+        if encoded.faces:
+            embedding = encoded.faces[0].embedding.astype(float).tolist()
+            return name, embedding, str(image_path.resolve()), skipped_no_face, skipped_multi_face
+    return name, None, None, skipped_no_face, skipped_multi_face
+
+
 def _iter_person_folders(root: Path, skip_levels: int) -> list[tuple[str, Path]]:
     """Return (student_name, folder) pairs, skipping wrapper folders under root."""
     if skip_levels < 0:
@@ -108,7 +133,9 @@ def build_naming_index(
     root: Path,
     *,
     skip_levels: int = 0,
+    workers: int | None = None,
     on_progress: Optional[ProgressCallback] = None,
+    should_cancel: Optional[CancelCallback] = None,
 ) -> NamingIndex:
     """Scan naming_reference — one single-face photo per person folder is enough."""
     if not root.is_dir():
@@ -117,32 +144,82 @@ def build_naming_index(
     index = NamingIndex()
     person_folders = _iter_person_folders(root, skip_levels)
     total = len(person_folders)
+    worker_count = effective_scan_workers(workers)
 
-    for folder_index, (name, folder) in enumerate(person_folders, start=1):
-        if on_progress:
-            on_progress(
-                "naming",
-                folder_index,
-                total,
-                f"Indexing reference: {name}",
+    if worker_count <= 1:
+        for folder_index, (name, folder) in enumerate(person_folders, start=1):
+            if should_cancel and should_cancel():
+                break
+            if on_progress:
+                on_progress(
+                    "naming",
+                    folder_index,
+                    total,
+                    f"Indexing reference: {name}",
+                )
+
+            embedding, source_image = _first_single_face_in_folder(folder, index)
+            if embedding is None:
+                index.skipped_empty_folders += 1
+                logger.warning("Naming reference folder has no single-face photos: %s", name)
+                continue
+
+            index.references.append(
+                NamedReference(
+                    name=name,
+                    centroid=normalize_embedding(embedding),
+                    sample_count=1,
+                    source_image=source_image,
+                    folder=folder,
+                )
             )
+            logger.debug("Reference %s from %s", name, source_image)
+    else:
+        logger.info("Naming index with %d parallel workers", worker_count)
+        payloads = [(name, str(folder.resolve())) for name, folder in person_folders]
+        folder_by_name = {name: folder for name, folder in person_folders}
+        completed = 0
+        results: dict[str, tuple[Optional[list[float]], Optional[str], int, int]] = {}
 
-        embedding, source_image = _first_single_face_in_folder(folder, index)
-        if embedding is None:
-            index.skipped_empty_folders += 1
-            logger.warning("Naming reference folder has no single-face photos: %s", name)
-            continue
+        with ProcessPoolExecutor(
+            max_workers=worker_count,
+            initializer=init_scan_worker,
+            initargs=(worker_count,),
+        ) as pool:
+            futures = [pool.submit(_index_folder_worker, payload) for payload in payloads]
+            for future in as_completed(futures):
+                if should_cancel and should_cancel():
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    break
+                name, embedding, source_image, skipped_no_face, skipped_multi_face = future.result()
+                results[name] = (embedding, source_image, skipped_no_face, skipped_multi_face)
+                index.skipped_no_face += skipped_no_face
+                index.skipped_multi_face += skipped_multi_face
+                completed += 1
+                if on_progress:
+                    on_progress(
+                        "naming",
+                        completed,
+                        total,
+                        f"Indexing reference: {name}",
+                    )
 
-        index.references.append(
-            NamedReference(
-                name=name,
-                centroid=normalize_embedding(embedding),
-                sample_count=1,
-                source_image=source_image,
-                folder=folder,
+        for name, folder in person_folders:
+            embedding, source_image, _, _ = results.get(name, (None, None, 0, 0))
+            if embedding is None:
+                index.skipped_empty_folders += 1
+                logger.warning("Naming reference folder has no single-face photos: %s", name)
+                continue
+            index.references.append(
+                NamedReference(
+                    name=name,
+                    centroid=normalize_embedding(np.asarray(embedding, dtype=np.float64)),
+                    sample_count=1,
+                    source_image=Path(source_image) if source_image else None,
+                    folder=folder_by_name[name],
+                )
             )
-        )
-        logger.debug("Reference %s from %s", name, source_image)
+            logger.debug("Reference %s from %s", name, source_image)
 
     if not index.references:
         raise ValueError(
@@ -181,10 +258,23 @@ def build_person_rename_map(
     cluster_embeddings: dict[ClusterKey, list[np.ndarray]],
     index: NamingIndex,
     tolerance: float = MATCH_TOLERANCE,
+    *,
+    on_progress: Optional[ProgressCallback] = None,
 ) -> dict[ClusterKey, str]:
     """Map (class, cluster_index) → reference folder name."""
     rename: dict[ClusterKey, str] = {}
-    for key, embeddings in cluster_embeddings.items():
+    items = list(cluster_embeddings.items())
+    total = len(items)
+    for index_num, (key, embeddings) in enumerate(items, start=1):
+        if on_progress and total:
+            class_folder, cluster_index = key
+            label = f"{class_folder}/Person_{cluster_index + 1:03d}" if class_folder else f"Person_{cluster_index + 1:03d}"
+            on_progress(
+                "naming_match",
+                index_num,
+                total,
+                f"Matching cluster: {label}",
+            )
         name, similarity = match_cluster_to_name(embeddings, index, tolerance)
         if name:
             rename[key] = name

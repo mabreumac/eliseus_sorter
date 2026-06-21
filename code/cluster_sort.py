@@ -236,6 +236,7 @@ def _resolve_person_renames(
     config: SortConfig,
     cluster_embeddings: dict[ClusterKey, list[np.ndarray]],
     on_progress: Optional[ProgressCallback] = None,
+    should_cancel: Optional[CancelCallback] = None,
 ) -> dict[ClusterKey, str]:
     if config.naming_reference is None:
         return {}
@@ -243,9 +244,16 @@ def _resolve_person_renames(
     index = build_naming_index(
         ref_path,
         skip_levels=config.naming_reference_skip,
+        workers=config.scan_workers,
+        on_progress=on_progress,
+        should_cancel=should_cancel,
+    )
+    return build_person_rename_map(
+        cluster_embeddings,
+        index,
+        config.tolerance,
         on_progress=on_progress,
     )
-    return build_person_rename_map(cluster_embeddings, index, config.tolerance)
 
 
 def _rename_log(rename_map: dict[ClusterKey, str]) -> dict[str, str]:
@@ -542,6 +550,7 @@ def _run_flat_sort(
         config,
         _gather_flat_cluster_embeddings(all_faces, cluster_assignments),
         on_progress,
+        should_cancel,
     )
 
     raw_results: list[MatchResult] = []
@@ -674,6 +683,7 @@ def _run_class_sort(
         config,
         _gather_class_cluster_embeddings(per_image_faces, face_assignments),
         on_progress,
+        should_cancel,
     )
 
     raw_results: list[MatchResult] = []

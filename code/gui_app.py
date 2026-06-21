@@ -47,7 +47,8 @@ ACCENT_HOVER = ACCENT_HOVER
 PHASE_LABELS = {
     "scan": "Scanning faces",
     "cluster": "Clustering faces",
-    "naming": "Matching names",
+    "naming": "Indexing names",
+    "naming_match": "Matching names",
     "sort": "Copying files",
 }
 
