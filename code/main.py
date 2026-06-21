@@ -16,7 +16,8 @@ from pathlib import Path
 if __name__ == "__main__" and __package__ is None:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import DEFAULT_MIN_CLASS_FACES, DEFAULT_NAMING_REFERENCE_SKIP, GROUP_OUTPUT_FOLDER, MATCH_TOLERANCE
+from config import DEFAULT_INFERENCE_DEVICE, DEFAULT_MIN_CLASS_FACES, DEFAULT_NAMING_REFERENCE_SKIP, DEFAULT_SCAN_WORKERS, GROUP_OUTPUT_FOLDER, MATCH_TOLERANCE
+from face_engine import configure_inference_device
 from group_photos import GroupPhotoSettings
 from production import BatchSortResult, SortConfig, run_sort
 from reporting import format_result_line
@@ -68,6 +69,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Also copy group photos into each matched person folder (default: group folder only)",
     )
+    parser.add_argument(
+        "--scan-workers",
+        type=int,
+        default=DEFAULT_SCAN_WORKERS,
+        choices=[1, 2, 3, 4],
+        metavar="N",
+        help="Parallel face-scan processes (1=safe, 2–4=faster, more RAM; default: %(default)s)",
+    )
+    parser.add_argument(
+        "--inference-device",
+        choices=["auto", "cpu", "coreml", "cuda"],
+        default=DEFAULT_INFERENCE_DEVICE,
+        help="Inference backend: auto (GPU if available), cpu, coreml (Apple), cuda (NVIDIA)",
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     return parser.parse_args(argv)
 
@@ -94,6 +109,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     _configure_logging(args.verbose)
 
+    configure_inference_device(args.inference_device)
+
     config = SortConfig(
         input_dir=args.input,
         output_dir=args.output,
@@ -102,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         naming_reference=args.naming_reference,
         naming_reference_skip=args.naming_reference_skip,
         duplicate_group_photos=args.duplicate_group_photos,
+        scan_workers=args.scan_workers,
         group_settings=GroupPhotoSettings(
             group_output_folder=GROUP_OUTPUT_FOLDER,
         ),

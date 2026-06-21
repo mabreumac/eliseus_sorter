@@ -17,12 +17,14 @@ from config import (
     CLASS_PHOTOS_FOLDER,
     DEFAULT_MIN_CLASS_FACES,
     DEFAULT_NAMING_REFERENCE_SKIP,
+    DEFAULT_SCAN_WORKERS,
     GROUP_OUTPUT_FOLDER,
     MATCH_TOLERANCE,
     SORT_LOG_NAME,
     UNMATCHED_FOLDER,
 )
 from embeddings import encode_faces_from_path
+from face_scan import scan_all_images
 from group_photos import GroupPhotoMode, GroupPhotoSettings
 from image_utils import iter_sort_input_images
 from match_subset import (
@@ -63,6 +65,7 @@ class SortConfig:
     naming_reference: Optional[Path] = None
     naming_reference_skip: int = DEFAULT_NAMING_REFERENCE_SKIP
     duplicate_group_photos: bool = False
+    scan_workers: int = DEFAULT_SCAN_WORKERS
 
     def in_place_sort(self) -> bool:
         try:
@@ -150,6 +153,45 @@ def extract_faces_from_image(
         for face in encoding.faces
     ]
     return faces, None
+
+
+def _scan_all_faces(
+    image_paths: list[Path],
+    encoding_mode: GroupPhotoMode,
+    runtime: SortRuntime,
+    *,
+    scan_workers: int = DEFAULT_SCAN_WORKERS,
+    on_progress: Optional[ProgressCallback] = None,
+    should_cancel: Optional[CancelCallback] = None,
+) -> list[tuple[Path, list[DetectedFace], Optional[str]]]:
+    scanned = scan_all_images(
+        image_paths,
+        encoding_mode,
+        workers=scan_workers,
+        on_progress=on_progress,
+        should_cancel=should_cancel,
+    )
+    per_image_faces: list[tuple[Path, list[DetectedFace], Optional[str]]] = []
+    for image_path, face_rows, error in scanned:
+        if error:
+            per_image_faces.append((image_path, [], error))
+            continue
+        faces = [
+            DetectedFace(
+                image_path=image_path,
+                face_index=face_index,
+                num_faces=num_faces,
+                embedding=embedding,
+            )
+            for face_index, num_faces, embedding in face_rows
+        ]
+        per_image_faces.append((image_path, faces, None))
+        if faces:
+            runtime.num_images_with_face += 1
+            runtime.num_faces_detected += len(faces)
+        else:
+            runtime.num_images_no_face += 1
+    return per_image_faces
 
 
 def _is_class_photo(num_faces: int, min_class_faces: int) -> bool:
@@ -470,21 +512,15 @@ def _run_flat_sort(
         raise ValueError(f"No images found in {config.input_dir}")
 
     runtime = SortRuntime(num_images=total)
-    per_image_faces: list[tuple[Path, list[DetectedFace], Optional[str]]] = []
-
     t_scan = time.perf_counter()
-    for index, image_path in enumerate(image_paths, start=1):
-        if should_cancel and should_cancel():
-            break
-        if on_progress:
-            on_progress("scan", index, total, f"Scanning faces: {image_path.name}")
-        faces, error = extract_faces_from_image(image_path, encoding_mode)
-        per_image_faces.append((image_path, faces, error))
-        if faces:
-            runtime.num_images_with_face += 1
-            runtime.num_faces_detected += len(faces)
-        elif not error:
-            runtime.num_images_no_face += 1
+    per_image_faces = _scan_all_faces(
+        image_paths,
+        encoding_mode,
+        runtime,
+        scan_workers=config.scan_workers,
+        on_progress=on_progress,
+        should_cancel=should_cancel,
+    )
     runtime.scan_seconds = time.perf_counter() - t_scan
 
     clusterer = FaceClusterer(similarity_threshold=config.tolerance)
@@ -573,21 +609,15 @@ def _run_class_sort(
         raise ValueError(f"No images found in {config.input_dir}")
 
     runtime = SortRuntime(num_images=total)
-    per_image_faces: list[tuple[Path, list[DetectedFace], Optional[str]]] = []
-
     t_scan = time.perf_counter()
-    for index, image_path in enumerate(image_paths, start=1):
-        if should_cancel and should_cancel():
-            break
-        if on_progress:
-            on_progress("scan", index, total, f"Scanning faces: {image_path.name}")
-        faces, error = extract_faces_from_image(image_path, encoding_mode)
-        per_image_faces.append((image_path, faces, error))
-        if faces:
-            runtime.num_images_with_face += 1
-            runtime.num_faces_detected += len(faces)
-        elif not error:
-            runtime.num_images_no_face += 1
+    per_image_faces = _scan_all_faces(
+        image_paths,
+        encoding_mode,
+        runtime,
+        scan_workers=config.scan_workers,
+        on_progress=on_progress,
+        should_cancel=should_cancel,
+    )
     runtime.scan_seconds = time.perf_counter() - t_scan
 
     class_photos = [
@@ -607,7 +637,7 @@ def _run_class_sort(
     t_cluster = time.perf_counter()
     for photo_path, faces in sorted(class_photos, key=lambda item: item[0].name):
         embeddings = [(face.face_index, face.embedding) for face in faces]
-        registry.add_class_from_photo(photo_path, embeddings)
+        registry.register_class_photo(photo_path, embeddings)
         class_photo_paths.add(photo_path)
 
     face_assignments: dict[tuple[str, int], tuple[str, int, float]] = {}

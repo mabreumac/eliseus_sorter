@@ -6,6 +6,7 @@ from __future__ import annotations
 import queue
 import sys
 import threading
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -21,14 +22,59 @@ import customtkinter as ctk
 
 from app_paths import ensure_app_support, is_app_bundle, load_settings, save_settings
 from branding import ACCENT_COLOR, ACCENT_HOVER, APP_NAME, APP_TAGLINE
-from config import DEFAULT_MIN_CLASS_FACES, DEFAULT_NAMING_REFERENCE_SKIP, GROUP_OUTPUT_FOLDER, MATCH_TOLERANCE
+from config import (
+    DEFAULT_INFERENCE_DEVICE,
+    DEFAULT_MIN_CLASS_FACES,
+    DEFAULT_NAMING_REFERENCE_SKIP,
+    DEFAULT_SCAN_WORKERS,
+    GROUP_OUTPUT_FOLDER,
+    MATCH_TOLERANCE,
+)
+from face_engine import (
+    active_inference_label,
+    available_accelerators,
+    configure_inference_device,
+)
 from group_photos import GroupPhotoSettings
 from reporting import format_result_line
+from resource_monitor import format_resource_line, snapshot_process_tree
 
 APP_TITLE = APP_NAME
-WINDOW_SIZE = "720x680"
+WINDOW_SIZE = "720x780"
 ACCENT = ACCENT_COLOR
 ACCENT_HOVER = ACCENT_HOVER
+
+PHASE_LABELS = {
+    "scan": "Scanning faces",
+    "cluster": "Clustering faces",
+    "naming": "Matching names",
+    "sort": "Copying files",
+}
+
+SCAN_WORKER_CHOICES: tuple[tuple[str, int], ...] = (
+    ("1 — safe (default)", 1),
+    ("2 — balanced", 2),
+    ("3 — fast", 3),
+    ("4 — max speed", 4),
+)
+SCAN_WORKER_LABELS = [label for label, _ in SCAN_WORKER_CHOICES]
+SCAN_WORKER_VALUES = {label: value for label, value in SCAN_WORKER_CHOICES}
+
+
+def _inference_device_menu_choices() -> tuple[list[str], dict[str, str], dict[str, str]]:
+    accelerators = available_accelerators()
+    options: list[tuple[str, str]] = [
+        ("Auto", "auto"),
+        ("CPU only", "cpu"),
+    ]
+    if accelerators["coreml"]:
+        options.append(("Apple GPU (CoreML)", "coreml"))
+    if accelerators["cuda"]:
+        options.append(("NVIDIA GPU (CUDA)", "cuda"))
+    labels = [label for label, _ in options]
+    label_to_value = {label: value for label, value in options}
+    value_to_label = {value: label for label, value in options}
+    return labels, label_to_value, value_to_label
 
 
 class PathSelector(ctk.CTkFrame):
@@ -85,6 +131,9 @@ class EliseusSorterApp(ctk.CTk):
         self._settings = load_settings()
         self._cancel_event = threading.Event()
         self._worker: Optional[threading.Thread] = None
+        self._monitor_stop = threading.Event()
+        self._sort_started_at: Optional[float] = None
+        self._active_scan_workers = DEFAULT_SCAN_WORKERS
         self._ui_queue: queue.Queue = queue.Queue()
 
         self._build_layout()
@@ -175,8 +224,72 @@ class EliseusSorterApp(ctk.CTk):
         )
         self.duplicate_group_checkbox.grid(row=0, column=0, sticky="w")
 
+        workers_row = ctk.CTkFrame(paths, fg_color="transparent")
+        workers_row.grid(row=6, column=0, padx=16, pady=(0, 6), sticky="ew")
+        ctk.CTkLabel(workers_row, text="Scan workers", width=120, anchor="w").grid(
+            row=0, column=0, sticky="w"
+        )
+        saved_workers = int(self._settings.get("scan_workers", DEFAULT_SCAN_WORKERS))
+        saved_workers = max(1, min(4, saved_workers))
+        default_label = next(
+            label for label, value in SCAN_WORKER_CHOICES if value == saved_workers
+        )
+        self.scan_workers_var = tk.StringVar(value=default_label)
+        self.scan_workers_menu = ctk.CTkOptionMenu(
+            workers_row,
+            variable=self.scan_workers_var,
+            values=SCAN_WORKER_LABELS,
+            width=180,
+        )
+        self.scan_workers_menu.grid(row=0, column=1, sticky="w", padx=(0, 8))
+        ctk.CTkLabel(
+            workers_row,
+            text="More workers = faster scan, more RAM (~200 MB per extra worker)",
+            font=ctk.CTkFont(size=12),
+            text_color=("gray30", "gray70"),
+        ).grid(row=0, column=2, sticky="w")
+
+        accel_row = ctk.CTkFrame(paths, fg_color="transparent")
+        accel_row.grid(row=7, column=0, padx=16, pady=(0, 6), sticky="ew")
+        ctk.CTkLabel(accel_row, text="Acceleration", width=120, anchor="w").grid(
+            row=0, column=0, sticky="w"
+        )
+        (
+            self.inference_device_labels,
+            self.inference_device_values,
+            self.inference_device_by_value,
+        ) = _inference_device_menu_choices()
+        saved_device = str(
+            self._settings.get("inference_device", DEFAULT_INFERENCE_DEVICE)
+        ).lower()
+        if saved_device not in self.inference_device_by_value:
+            saved_device = DEFAULT_INFERENCE_DEVICE
+        self.inference_device_var = tk.StringVar(
+            value=self.inference_device_by_value.get(saved_device, "Auto")
+        )
+        self.inference_device_menu = ctk.CTkOptionMenu(
+            accel_row,
+            variable=self.inference_device_var,
+            values=self.inference_device_labels,
+            width=180,
+        )
+        self.inference_device_menu.grid(row=0, column=1, sticky="w", padx=(0, 8))
+        accel_hint = "Uses Apple/NVIDIA GPU when available (Auto)"
+        if available_accelerators()["coreml"]:
+            accel_hint = "Apple GPU (CoreML) available — Auto uses it"
+        elif available_accelerators()["cuda"]:
+            accel_hint = "NVIDIA GPU (CUDA) available — Auto uses it"
+        else:
+            accel_hint = "No GPU backend detected — CPU only on this Mac"
+        ctk.CTkLabel(
+            accel_row,
+            text=accel_hint,
+            font=ctk.CTkFont(size=12),
+            text_color=("gray30", "gray70"),
+        ).grid(row=0, column=2, sticky="w")
+
         actions = ctk.CTkFrame(paths, fg_color="transparent")
-        actions.grid(row=6, column=0, padx=16, pady=(0, 16), sticky="ew")
+        actions.grid(row=8, column=0, padx=16, pady=(0, 16), sticky="ew")
         actions.grid_columnconfigure(0, weight=1)
         actions.grid_columnconfigure(1, weight=1)
         self.sort_btn = ctk.CTkButton(
@@ -199,7 +312,7 @@ class EliseusSorterApp(ctk.CTk):
         progress = ctk.CTkFrame(self, corner_radius=12)
         progress.grid(row=2, column=0, padx=20, pady=(8, 20), sticky="nsew")
         progress.grid_columnconfigure(0, weight=1)
-        progress.grid_rowconfigure(3, weight=1)
+        progress.grid_rowconfigure(4, weight=1)
         self.phase_label = ctk.CTkLabel(
             progress, text="Ready", font=ctk.CTkFont(size=14, weight="bold")
         )
@@ -210,15 +323,23 @@ class EliseusSorterApp(ctk.CTk):
             anchor="w",
             wraplength=620,
         )
-        self.status_label.grid(row=1, column=0, padx=16, pady=(0, 8), sticky="ew")
+        self.status_label.grid(row=1, column=0, padx=16, pady=(0, 4), sticky="ew")
+        self.resource_label = ctk.CTkLabel(
+            progress,
+            text="",
+            anchor="w",
+            font=ctk.CTkFont(size=12),
+            text_color=("gray30", "gray70"),
+        )
+        self.resource_label.grid(row=2, column=0, padx=16, pady=(0, 8), sticky="ew")
         self.progress = ctk.CTkProgressBar(progress, progress_color=ACCENT)
-        self.progress.grid(row=2, column=0, padx=16, pady=(0, 8), sticky="ew")
+        self.progress.grid(row=3, column=0, padx=16, pady=(0, 8), sticky="ew")
         self.progress.set(0)
         self.log_box = ctk.CTkTextbox(
             progress, font=ctk.CTkFont(family="Menlo", size=12)
         )
-        self.log_box.grid(row=3, column=0, padx=16, pady=(0, 16), sticky="nsew")
-        progress.grid_rowconfigure(3, weight=1)
+        self.log_box.grid(row=4, column=0, padx=16, pady=(0, 16), sticky="nsew")
+        progress.grid_rowconfigure(4, weight=1)
 
     def _min_class_faces(self) -> int:
         try:
@@ -237,6 +358,14 @@ class EliseusSorterApp(ctk.CTk):
         if value < 0:
             raise ValueError("Ref folder skip must be 0 or greater.")
         return value
+
+    def _scan_workers(self) -> int:
+        label = self.scan_workers_var.get()
+        return SCAN_WORKER_VALUES.get(label, DEFAULT_SCAN_WORKERS)
+
+    def _inference_device(self) -> str:
+        label = self.inference_device_var.get()
+        return self.inference_device_values.get(label, DEFAULT_INFERENCE_DEVICE)
 
     def _naming_reference_path(self) -> Optional[Path]:
         raw = self.naming_reference_dir.path
@@ -257,6 +386,7 @@ class EliseusSorterApp(ctk.CTk):
             naming_reference=self._naming_reference_path(),
             naming_reference_skip=self._naming_reference_skip(),
             duplicate_group_photos=self.duplicate_group_photos_var.get(),
+            scan_workers=self._scan_workers(),
             group_settings=GroupPhotoSettings(
                 group_output_folder=GROUP_OUTPUT_FOLDER,
             ),
@@ -271,6 +401,8 @@ class EliseusSorterApp(ctk.CTk):
                 "naming_reference": str(self.naming_reference_dir.path),
                 "naming_reference_skip": self._naming_reference_skip(),
                 "duplicate_group_photos": self.duplicate_group_photos_var.get(),
+                "scan_workers": self._scan_workers(),
+                "inference_device": self._inference_device(),
             }
         )
 
@@ -282,6 +414,8 @@ class EliseusSorterApp(ctk.CTk):
         self.naming_reference_dir.entry.configure(state=state)
         self.naming_reference_skip_entry.configure(state=state)
         self.duplicate_group_checkbox.configure(state=state)
+        self.scan_workers_menu.configure(state=state)
+        self.inference_device_menu.configure(state=state)
         self.cancel_btn.configure(state="normal" if running else "disabled")
 
     def _request_cancel(self) -> None:
@@ -312,9 +446,26 @@ class EliseusSorterApp(ctk.CTk):
         self._run_on_ui(self._update_progress, phase, current, total, message)
 
     def _update_progress(self, phase: str, current: int, total: int, message: str) -> None:
-        self.progress.set(min(current / total if total else 0, 1.0))
-        self.phase_label.configure(text="Sorting photos")
+        fraction = min(current / total if total else 0, 1.0)
+        self.progress.set(fraction)
+        phase_title = PHASE_LABELS.get(phase, "Sorting photos")
+        percent = int(fraction * 100)
+        self.phase_label.configure(text=f"{phase_title} — {percent}%")
         self.status_label.configure(text=f"{message}  ({current}/{total})")
+
+    def _update_resources(self) -> None:
+        if self._sort_started_at is None:
+            return
+        elapsed = time.perf_counter() - self._sort_started_at
+        snap = snapshot_process_tree()
+        self.resource_label.configure(
+            text=format_resource_line(
+                snap,
+                scan_workers=self._active_scan_workers,
+                elapsed_seconds=elapsed,
+                inference=active_inference_label(),
+            )
+        )
 
     def _start_sort(self) -> None:
         if self._worker and self._worker.is_alive():
@@ -333,15 +484,38 @@ class EliseusSorterApp(ctk.CTk):
             messagebox.showerror(APP_TITLE, str(exc))
             return
 
+        device = self._inference_device()
+        resolved = configure_inference_device(device)
+        if resolved in {"coreml", "cuda"} and config.scan_workers > 1:
+            if not messagebox.askyesno(
+                APP_TITLE,
+                "GPU acceleration works best with 1 scan worker.\n\n"
+                f"You selected {config.scan_workers} workers, which loads the model "
+                "multiple times and may use a lot of VRAM.\n\n"
+                "Continue anyway?",
+            ):
+                return
+
         self._persist_settings()
         self._cancel_event.clear()
+        self._monitor_stop.clear()
+        self._sort_started_at = time.perf_counter()
+        self._active_scan_workers = config.scan_workers
         self._set_running(True)
         self.progress.set(0)
+        self.resource_label.configure(
+            text=f"Loading model on {active_inference_label()}…"
+        )
         self.log_box.delete("1.0", "end")
         self._worker = threading.Thread(
             target=self._worker_run, args=(config,), daemon=True
         )
         self._worker.start()
+        threading.Thread(target=self._resource_monitor_loop, daemon=True).start()
+
+    def _resource_monitor_loop(self) -> None:
+        while not self._monitor_stop.wait(1.0):
+            self._run_on_ui(self._update_resources)
 
     def _worker_run(self, config: "SortConfig") -> None:
         from production import run_sort
@@ -355,6 +529,17 @@ class EliseusSorterApp(ctk.CTk):
             self._run_on_ui(self._finish, outcome)
         except Exception as exc:  # noqa: BLE001
             self._run_on_ui(self._finish_error, str(exc))
+        finally:
+            self._monitor_stop.set()
+
+    def _format_runtime(self, runtime: object) -> str:
+        return (
+            f"Timing — scan {runtime.scan_seconds:.1f}s, "
+            f"cluster {runtime.cluster_seconds:.1f}s, "
+            f"copy {runtime.copy_seconds:.1f}s · "
+            f"{runtime.num_faces_detected} faces in "
+            f"{runtime.num_images_with_face}/{runtime.num_images} images"
+        )
 
     def _log_result(self, result: object) -> None:
         self._append_log(f"Output: {result.output_dir}")
@@ -366,6 +551,8 @@ class EliseusSorterApp(ctk.CTk):
         )
         if result.log_path:
             self._append_log(f"Log: {result.log_path}")
+        if getattr(result, "runtime", None):
+            self._append_log(self._format_runtime(result.runtime))
         if result.person_renames:
             self._append_log("Person names:")
             for generic, named in sorted(result.person_renames.items()):
@@ -388,7 +575,9 @@ class EliseusSorterApp(ctk.CTk):
                 self._append_log(format_result_line(item))
 
         self._set_running(False)
+        self._sort_started_at = None
         self.phase_label.configure(text="Done")
+        self._update_resources()
         if in_place:
             finish_text = (
                 "Sorting finished. Photos were moved into subfolders "
@@ -401,6 +590,8 @@ class EliseusSorterApp(ctk.CTk):
     def _finish_error(self, message: str) -> None:
         self._append_log(f"ERROR: {message}")
         self._set_running(False)
+        self._sort_started_at = None
+        self.resource_label.configure(text="")
         messagebox.showerror(APP_TITLE, message)
 
 

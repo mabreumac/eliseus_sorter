@@ -27,17 +27,15 @@ def main() -> int:
         return 1
 
     try:
-        from insightface.app import FaceAnalysis
+        from face_engine import active_inference_label, configure_inference_device, get_face_analysis
 
-        from config import INSIGHTFACE_DET_SIZE, INSIGHTFACE_MODEL
-
-        app = FaceAnalysis(name=INSIGHTFACE_MODEL, providers=["CPUExecutionProvider"])
-        app.prepare(ctx_id=-1, det_size=INSIGHTFACE_DET_SIZE)
+        configure_inference_device("auto")
+        get_face_analysis()
     except Exception as exc:  # noqa: BLE001
         print(f"InsightFace model load failed: {exc}", file=sys.stderr)
         return 1
 
-    print("Eliseus Sorter ready (InsightFace + GUI).")
+    print(f"Eliseus Sorter ready (InsightFace on {active_inference_label()} + GUI).")
     return 0
 
 
