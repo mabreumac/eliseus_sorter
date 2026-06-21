@@ -154,6 +154,8 @@ class EliseusSorterApp(ctk.CTk):
             text=APP_TAGLINE,
             font=ctk.CTkFont(size=13),
             text_color=("gray30", "gray70"),
+            wraplength=660,
+            justify="left",
         ).grid(row=1, column=0, padx=20, pady=(0, 16), sticky="w")
 
         paths = ctk.CTkFrame(self, corner_radius=12)
@@ -190,14 +192,14 @@ class EliseusSorterApp(ctk.CTk):
         self.naming_reference_skip_entry.grid(row=0, column=1, sticky="w", padx=(0, 8))
         ctk.CTkLabel(
             naming_skip_row,
-            text="Levels up from each photo's folder to the student name (0 = folder that holds the JPG)",
+            text="Folder levels up from each photo to the identity label (0 = folder that holds the image)",
             font=ctk.CTkFont(size=12),
             text_color=("gray30", "gray70"),
         ).grid(row=0, column=2, sticky="w")
 
         class_row = ctk.CTkFrame(paths, fg_color="transparent")
         class_row.grid(row=4, column=0, padx=16, pady=(0, 6), sticky="ew")
-        ctk.CTkLabel(class_row, text="Class if faces >", width=120, anchor="w").grid(
+        ctk.CTkLabel(class_row, text="Group if faces >", width=120, anchor="w").grid(
             row=0, column=0, sticky="w"
         )
         self.min_class_faces_var = tk.StringVar(
@@ -208,7 +210,7 @@ class EliseusSorterApp(ctk.CTk):
         )
         ctk.CTkLabel(
             class_row,
-            text="Subfolders in input → separate runs (run_name/)",
+            text="Large group images seed roster clusters; input subfolders → separate runs",
             font=ctk.CTkFont(size=12),
             text_color=("gray30", "gray70"),
         ).grid(row=0, column=2, sticky="w")
@@ -320,7 +322,7 @@ class EliseusSorterApp(ctk.CTk):
         self.phase_label.grid(row=0, column=0, padx=16, pady=(14, 4), sticky="w")
         self.status_label = ctk.CTkLabel(
             progress,
-            text="Output: class_001/StudentName or Person_001 if no naming reference.",
+            text="Output: class_001/PersonName or Person_001 without a naming reference.",
             anchor="w",
             wraplength=620,
         )
@@ -346,9 +348,9 @@ class EliseusSorterApp(ctk.CTk):
         try:
             value = int(self.min_class_faces_var.get().strip())
         except ValueError as exc:
-            raise ValueError("Class face threshold must be a whole number.") from exc
+            raise ValueError("Group face threshold must be a whole number.") from exc
         if value < 1:
-            raise ValueError("Class face threshold must be at least 1.")
+            raise ValueError("Group face threshold must be at least 1.")
         return value
 
     def _naming_reference_skip(self) -> int:
@@ -545,7 +547,7 @@ class EliseusSorterApp(ctk.CTk):
     def _log_result(self, result: object) -> None:
         self._append_log(f"Output: {result.output_dir}")
         if result.num_classes:
-            self._append_log(f"Classes: {result.num_classes}")
+            self._append_log(f"Roster groups: {result.num_classes}")
         self._append_log(f"Person clusters: {result.num_clusters}")
         self._append_log(
             f"Copies: {result.matched_count} matched, {result.unmatched_count} unmatched"

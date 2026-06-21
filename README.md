@@ -1,14 +1,26 @@
 # Eliseus Sorter
 
-Sort school photos by face into class and student folders. Everything runs on your Mac — nothing is uploaded.
+Desktop photo organizer for macOS. Detects faces with **InsightFace** (RetinaFace + ArcFace CNN), groups identities through **unsupervised clustering**, and optionally assigns human-readable labels via **reference matching** — entirely on your machine.
 
 **Requires macOS 12 or later.**
 
 ---
 
-## Install
+## How it works
 
-### From git
+| Stage | Method |
+|-------|--------|
+| **Detection & embedding** | InsightFace `buffalo_l` — RetinaFace bounding boxes, ArcFace 512-D embeddings (cosine similarity) |
+| **Roster groups** | Large multi-face photos seed per-group identity clusters; overlapping rosters merge automatically |
+| **Assignment** | Remaining faces matched to the nearest cluster centroid above a similarity threshold |
+| **Naming** *(optional)* | Reference library of labeled portraits; cluster centroids matched to reference embeddings |
+| **Output** | Files copied or moved into `class_*/Person_*` folders (or flat `Person_*` mode) |
+
+No cloud API. Models run locally via ONNX Runtime (CPU or Apple CoreML GPU when available).
+
+---
+
+## Install
 
 ```bash
 git clone https://github.com/mabreumac/eliseus_sorter.git
@@ -18,131 +30,115 @@ bash installer.command
 
 Or double-click **`installer.command`** in Finder.
 
-This **one step** installs Homebrew and Python if needed, all libraries (numpy, InsightFace, GUI, etc.), and copies the app to **`~/Applications/Eliseus Sorter.app`**. Takes about 10–15 minutes (internet required).
+One step installs Homebrew and Python if needed, Python dependencies, and builds **`~/Applications/Eliseus Sorter.app`** (~10–15 minutes, internet required).
 
-Open the app from **Applications** or Spotlight — **no second setup** on first launch.
+Open from **Applications** or Spotlight — no extra setup on first launch.
 
 If macOS blocks the app: **right-click → Open → Open**.
 
-### What the installer may ask
+### Installer prompts
 
 | Prompt | Action |
 |--------|--------|
-| **Install Eliseus Sorter now?** | Click **Install** (default) |
-| **Mac password** | Required once for Homebrew (if not already installed) |
-| **Xcode Command Line Tools** | Click **Install** in the Apple dialog; then run `installer.command` again |
+| **Install Eliseus Sorter now?** | Click **Install** |
+| **Mac password** | Required once for Homebrew (if missing) |
+| **Xcode Command Line Tools** | Install, then re-run `installer.command` |
 
-Logs: **`logs/install.log`** in the project folder.
+Logs: **`logs/install.log`**
 
 ### Requirements
 
 | Requirement | Notes |
 |-------------|--------|
 | macOS 12+ | Apple Silicon or Intel |
-| Internet | Required for the installer |
-| ~2 GB free disk | Python packages and face models |
+| Internet | First install and model download |
+| ~2 GB disk | Packages + InsightFace weights |
 
 ---
 
 ## Use the app
 
-1. **Input** — folder with your photos  
-2. **Output** — where sorted photos should go  
-3. **Naming ref** *(optional)* — reference portraits to name students (see below)  
-4. **Ref folder skip** — how many folder levels to walk **up** from each reference photo to the student name (see below)  
-5. **Class if faces >** — photos with more faces than this count define a class (default: 5)  
-6. **Duplicate group photos** — when checked, group photos are also copied into each matched person folder  
-7. **Scan workers** — parallel face scanning (`1` = safest; `2–4` = faster, more RAM)  
-8. **Acceleration** — `Auto` uses Apple GPU (CoreML) on M-series Macs when available; `CPU only` to disable  
-9. Click **Sort photos**
+1. **Input** — photos to sort  
+2. **Output** — destination folder  
+3. **Naming ref** *(optional)* — labeled reference portraits (see below)  
+4. **Ref folder skip** — folder levels **up** from each reference photo to the identity label  
+5. **Group if faces >** — photos with more faces than this define a roster group (default: 5)  
+6. **Duplicate group photos** — also copy multi-face images into each matched person folder  
+7. **Scan workers** — parallel inference (`1` = safest; `2–4` = faster, more RAM)  
+8. **Acceleration** — `Auto` prefers CoreML on Apple Silicon  
+9. **Sort photos**
 
-While sorting, the app shows **phase progress** (scan, cluster, naming, copy), **elapsed time**, **memory**, and **CPU** usage.
+Progress shows scan, cluster, naming, and copy phases plus memory, CPU, and elapsed time.
 
-### Input and output
+### Input / output behavior
 
-- **Different folders** — photos are **copied** into the output structure; originals stay in the input folder.  
-- **Same folder** — photos are **moved** into sorted subfolders. Extra copies are only created when a file must appear in more than one place (e.g. a group photo duplicated into person folders).
+- **Separate input and output** — originals are **copied**; input folder unchanged.  
+- **Same folder (in-place)** — files are **moved** into subfolders; duplicate copies only when one file must appear in multiple destinations.
 
-If your **Input** folder has immediate subfolders, each one is sorted separately into `run_<folder_name>/` under **Output**.
+Immediate subfolders under **Input** each become a separate run: `run_<name>/` under **Output**.
 
 ---
 
-## Optional: name students automatically
+## Optional: reference matching
 
-Point **Naming ref** at a folder of reference portraits. The app finds **every photo** under that folder, then derives each student name by walking **up** from the photo’s folder (depth-agnostic — JPGs can be in any subfolder).
+Provide a **Naming ref** folder of labeled portraits. The app discovers every image underneath, extracts a face embedding, and walks **up** N folder levels to read the identity label.
 
-**Ref folder skip** = levels **up** from the folder that holds the JPG:
+| Ref folder skip | Label folder is… |
+|-----------------|------------------|
+| **0** | Parent folder of the image |
+| **1** | One level above that |
+| **2** | Two levels above that |
 
-| Skip | Student name is… |
-|------|------------------|
-| **0** | The folder that directly contains the photo |
-| **1** | One folder above that |
-| **2** | Two folders above that |
-
-**Example** — same student, photo nested deep (`skip = 1` → `Maria`):
+Example (`skip = 1` → label `person_a`):
 
 ```
-naming_reference/
-  2024/
-    ClassA/
-      Maria/
-        pics/
+reference_library/
+  batch_2024/
+    set_01/
+      person_a/
+        images/
           portrait.jpg
 ```
 
-**Example** — photo directly in the student folder (`skip = 0`):
-
-```
-naming_reference/
-  Maria/
-    portrait.jpg
-```
-
-Each student needs at least one clear **single-face** photo. Matched output folders are renamed from `Person_001` to that student name.
+Each label needs at least one clear **single-face** image. Clusters rename from `Person_001` to the matched label when similarity exceeds the configured threshold.
 
 ---
 
-## What you get
+## Output layout
 
 ```
 output/
   class_001/
-    _class_photos/      ← large class group shots (6+ faces by default)
-    _group_photos/      ← smaller group photos for this class
-    Maria_Silva/        ← matched student (or Person_001 without naming ref)
-  class_002/
-    ...
-  _no_class/            ← faces that did not match any class roster (still clustered)
+    _class_photos/      ← roster seed images (large groups)
+    _group_photos/      ← smaller multi-face images
+    person_a/           ← matched identity (or Person_001 without reference)
+  _no_class/            ← faces outside any roster (still clustered)
     Person_001/
-    _group_photos/
-  _unmatched/           ← no face detected or unreadable image
+  _unmatched/           ← no face or unreadable file
 ```
 
-- **Multiple class photos of the same class** merge into one `class_001` folder when ≥ 50% of faces match.  
-- With **Duplicate group photos** unchecked (default), multi-face photos go only to `_group_photos` / `_class_photos`, not into individual student folders.  
-- Portraits with **blurred faces in the background** are less likely to count as group photos (small/low-confidence detections are filtered).
+- Duplicate roster photos with ≥ 50% face overlap merge into one `class_*` folder.  
+- Low-confidence or very small detections are filtered to reduce false multi-face classification.  
+- CLI **`--flat`** skips roster groups and writes `Person_*` at the output root ([DEVELOPING.md](DEVELOPING.md)).
 
 ---
 
-## Performance (GUI & defaults)
+## Performance
 
 | Setting | Recommendation |
 |---------|----------------|
-| **Acceleration → Auto** | Best on Apple Silicon (uses CoreML GPU) |
-| **Scan workers → 1** | Safest RAM use; use with GPU |
-| **Scan workers → 2** | Good balance on 16 GB Macs |
-| **Scan workers → 3–4** | Faster scan; ~200 MB RAM per extra worker |
+| **Acceleration → Auto** | Best on Apple Silicon (CoreML) |
+| **Scan workers → 1** | Safest with GPU acceleration |
+| **Scan workers → 2** | Good on 16 GB systems |
 
-After changing defaults in `code/config.py`, rebuild with **`installer.command`** or **`bash code/build_mac_app.sh`**.
-
-Useful `config.py` knobs:
+Tune defaults in `code/config.py`, then rebuild with **`installer.command`** or **`bash code/build_mac_app.sh`**.
 
 | Constant | Default | Effect |
 |----------|---------|--------|
-| `MIN_FACE_AREA_RATIO` | `0.12` | Ignore background faces much smaller than the main subject; `0` = off |
-| `MIN_FACE_DET_SCORE` | `0.45` | Drop low-confidence face detections |
-| `MAX_IMAGE_WIDTH` | `1024` | Lower = faster scan, less accurate on tiny faces |
-| `SCAN_WORKERS` | `0` (→ 1 in app) | Default parallel scan processes in bundled config |
+| `MIN_FACE_AREA_RATIO` | `0.12` | Ignore tiny background detections |
+| `MIN_FACE_DET_SCORE` | `0.45` | Minimum detector confidence |
+| `MAX_IMAGE_WIDTH` | `1024` | Pre-scale before inference |
+| `MATCH_TOLERANCE` | `0.4` | Minimum cosine similarity to merge identities |
 
 ---
 
@@ -150,25 +146,22 @@ Useful `config.py` knobs:
 
 | Issue | Fix |
 |-------|-----|
-| App won’t open | Right-click → **Open** → **Open**; see **`logs/app.log`** in the project folder |
-| Setup failed | See **`logs/install.log`** — then re-run **`installer.command`** |
-| Missing numpy / packages | Re-run **`installer.command`** (reinstalls the full environment) |
-| Slow first sort | Normal — face models download once (~100 MB) |
-| Wrong student names | Check naming ref layout and **Ref folder skip** (walk-up from each photo) |
-| Portraits treated as group photos | Raise `MIN_FACE_AREA_RATIO` in `config.py` (e.g. `0.18`) and rebuild |
-| Real group rows missing faces | Lower `MIN_FACE_AREA_RATIO` slightly (e.g. `0.08`) |
-| No class photos in batch | Need at least one photo with more than **Class if faces** count, or use CLI **`--flat`** (see [DEVELOPING.md](DEVELOPING.md)) |
-| GPU + high RAM use | Use **Scan workers = 1** with **Acceleration = Auto** |
+| App won't open | Right-click → **Open**; check **`logs/app.log`** |
+| Setup failed | **`logs/install.log`** → re-run **`installer.command`** |
+| Slow first run | InsightFace models download once (~100 MB) |
+| Wrong labels | Verify reference layout and **Ref folder skip** |
+| False group detection | Raise `MIN_FACE_AREA_RATIO` in `config.py` |
+| No roster in batch | Lower **Group if faces** or use **`--flat`** |
 
 Settings: `~/Library/Application Support/Eliseus Sorter/settings.json`  
-Logs: **`logs/`** in the project folder (same folder as `installer.command`)
+Logs: **`logs/`** in the project folder
 
 ---
 
 ## Privacy
 
-All face detection and sorting happens on your computer. Photos are not uploaded anywhere.
+All inference and file operations run locally. Images are not transmitted to external services.
 
 ---
 
-For development, CLI usage, and benchmarks, see [DEVELOPING.md](DEVELOPING.md).
+Development, CLI, and benchmarks: [DEVELOPING.md](DEVELOPING.md).

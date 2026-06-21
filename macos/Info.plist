@@ -27,6 +27,6 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>School photo organizer — local processing only.</string>
+    <string>On-device InsightFace inference — images never leave your Mac.</string>
 </dict>
 </plist>
