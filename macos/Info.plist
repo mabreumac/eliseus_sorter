@@ -6,11 +6,15 @@
     <string>en</string>
     <key>CFBundleExecutable</key>
     <string>eliseus_sorter</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.eliseus.sorter</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
+    <string>Eliseus Sorter</string>
+    <key>CFBundleDisplayName</key>
     <string>Eliseus Sorter</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
@@ -23,6 +27,6 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>Eliseus Sorter — local school photo matching</string>
+    <string>School photo organizer — local processing only.</string>
 </dict>
 </plist>

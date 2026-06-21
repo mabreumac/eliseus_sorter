@@ -13,10 +13,6 @@ from pathlib import Path
 
 TRASH_DIR_NAMES = {"_PRINT", "15X22"}
 
-DEFAULT_SOURCE = Path(
-    "/Users/marcosmachado/Library/CloudStorage/GoogleDrive-mklas98@gmail.com"
-    "/My Drive/eliseus_fotografia/data"
-)
 DEFAULT_DEST = Path(__file__).resolve().parent.parent / "data" / "benchmark"
 
 
@@ -96,7 +92,7 @@ def detect_layout(source: Path) -> dict[str, Path]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
+    parser.add_argument("--source", type=Path, required=True, help="Source data folder")
     parser.add_argument("--dest", type=Path, default=DEFAULT_DEST)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

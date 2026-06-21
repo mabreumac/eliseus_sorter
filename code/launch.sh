@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
-# Launch the desktop app (macOS).
+# Launch Eliseus Sorter (Applications app by default, or local dev with --local).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=paths.sh
 source "${SCRIPT_DIR}/paths.sh"
+# shellcheck source=../macos/branding.sh
+source "${SCRIPT_DIR}/../macos/branding.sh"
+
+APP_BUNDLE="${HOME}/Applications/${APP_NAME}.app"
+
+if [[ "${1:-}" != "--local" && -d "${APP_BUNDLE}" ]]; then
+  exec open "${APP_BUNDLE}"
+fi
+
 cd "${SCRIPT_DIR}"
 
 if [[ ! -d "${VENV_DIR}" ]]; then
   echo ""
-  echo "This app is not installed yet."
-  echo "Please double-click  Install.command  first."
+  echo "Setup is not complete."
+  echo "Open Eliseus Sorter from Applications — first launch runs setup automatically."
+  echo "Or from this project folder: bash code/install.sh"
   echo ""
   exit 1
 fi
@@ -26,15 +36,15 @@ if ! python -c "import tkinter" 2>/dev/null; then
   echo "Quick fix — run in Terminal:"
   echo "  brew install python-tk@${PY_MM}"
   echo ""
-  echo "Then double-click  Install.command  again."
+  echo "Then run: bash code/install.sh"
   echo ""
   exit 1
 fi
 
-if ! python "${SCRIPT_DIR}/verify_install.py"; then
+if ! python "${SCRIPT_DIR}/verify_runtime.py"; then
   echo ""
   echo "Installation verification failed."
-  echo "Please run  Install.command  again."
+  echo "Run: bash code/install.sh"
   echo "Details: install.log"
   echo ""
   exit 1

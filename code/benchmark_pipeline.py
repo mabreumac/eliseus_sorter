@@ -78,6 +78,8 @@ def run_benchmark_sort(
             output_dir=config.output_dir,
             tolerance=config.tolerance,
             group_settings=config.group_settings,
+            min_class_faces=None,
+            recursive=False,
         ),
         on_progress=on_progress,
         should_cancel=should_cancel,

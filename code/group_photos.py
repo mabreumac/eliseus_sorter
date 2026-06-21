@@ -29,7 +29,13 @@ GROUP_PHOTO_MODE_LABELS: dict[GroupPhotoMode, str] = {
 
 def is_group_reference_folder(name: str, group_folder: str = GROUP_OUTPUT_FOLDER) -> bool:
     """True if a ground-truth folder holds group photos, not student reference."""
-    return name.strip().casefold() == group_folder.strip().casefold()
+    normalized = name.strip().casefold()
+    accepted = {
+        group_folder.strip().casefold(),
+        "grupo",
+        "group_photos",  # legacy output / benchmark folder names
+    }
+    return normalized in accepted
 
 
 @dataclass(frozen=True)

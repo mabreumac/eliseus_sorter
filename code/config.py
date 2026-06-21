@@ -15,9 +15,17 @@ EMBEDDING_DIM = 512
 # Production sorting
 UNMATCHED_FOLDER = "_unmatched"
 SORT_LOG_NAME = "_sort_log.csv"
+CLASS_FOLDER_PREFIX = "class_"
+CLASS_PHOTOS_FOLDER = "_class_photos"
 
-# Group photos (multi-face) are copied here — not matched to individual students.
-GROUP_OUTPUT_FOLDER = "Grupo"
+# Group photos (multi-face, below class threshold) → per-class _group_photos folder
+GROUP_OUTPUT_FOLDER = "_group_photos"
+
+# Photos with more than this many faces define a class (e.g. 5 → 6+ faces = class photo)
+DEFAULT_MIN_CLASS_FACES = 5
+
+# Extra folder levels between naming_reference root and student-name folders (0 = direct children)
+DEFAULT_NAMING_REFERENCE_SKIP = 0
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 

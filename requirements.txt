@@ -1,11 +1,9 @@
-# Face pipeline — InsightFace (RetinaFace + ArcFace via ONNX)
+# Production — installed by the app on first launch
 insightface>=0.7.3
 onnxruntime>=1.16.0
 opencv-python-headless>=4.8.0
-
 numpy>=1.24.0
 pandas>=2.0.0
-matplotlib>=3.8.0
 Pillow>=10.0.0
 customtkinter>=5.2.0
 setuptools>=65.0.0

@@ -89,7 +89,7 @@ def main() -> int:
         "--group",
         type=int,
         default=15,
-        help="Max photos in Grupo folder (default: 15)",
+        help="Max photos in _group_photos folder (default: 15)",
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--dry-run", action="store_true")

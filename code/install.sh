@@ -17,6 +17,11 @@ exec > >(tee -a "${LOG_FILE}") 2>&1
 
 cd "${PROJECT_ROOT}"
 
+# shellcheck source=../macos/branding.sh
+source "${PROJECT_ROOT}/macos/branding.sh"
+# shellcheck source=../macos/install_banner.sh
+source "${PROJECT_ROOT}/macos/install_banner.sh"
+
 python_version_ok() {
   local exe="$1"
   command -v "${exe}" >/dev/null 2>&1 || return 1
@@ -103,14 +108,15 @@ Or install Python manually:
   1. Open https://www.python.org/downloads/macos/
   2. Download Python 3.12 (or newer)
   3. Run the installer
-  4. Double-click install.command again
+  4. Run  bash code/install.sh  again
 
 Advanced (if Homebrew is already installed):
   brew install python@3.12
   bash code/install.sh"
 }
 
-info "Eliseus Sorter — installation"
+info "${APP_NAME} — one-time setup"
+print_banner "Setup"
 echo "  Project folder: ${PROJECT_ROOT}"
 echo "  Log file:       ${LOG_FILE}"
 
@@ -181,10 +187,10 @@ ensure_tkinter() {
 Homebrew Python needs a separate Tk package. In Terminal, run:
   brew install python-tk@${py_mm}
 
-Then double-click Install.command again.
+Then run: bash code/install.sh
 
 Or install Python from https://www.python.org/downloads/macos/ (includes Tk)
-and run Install again."
+and run  bash code/install.sh  again."
 }
 
 ensure_tkinter
@@ -213,13 +219,7 @@ cat <<EOF
 
 $(printf '\033[1;32mInstallation complete!\033[0m')
 
-Next step:
-  Double-click  \033[1mEliseus Sorter.command\033[0m  in this folder.
-
-In the app, choose any input folder (your photos) and an output folder
-for sorted results (Person_001, Person_002, Grupo, …).
-
-Log saved to: ${LOG_FILE}
 Python environment: ${VENV_DIR}
+Log saved to: ${LOG_FILE}
 
 EOF

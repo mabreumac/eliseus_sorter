@@ -10,7 +10,6 @@ from typing import Callable, Generator, Optional
 import numpy as np
 
 from config import DEFAULT_REFERENCE_DB, MATCH_TOLERANCE
-from database import iter_reference_embeddings
 from embeddings import cosine_similarity, encode_faces_from_path
 from group_photos import GroupPhotoMode, GroupPhotoSettings
 from image_utils import iter_match_sources
@@ -47,6 +46,8 @@ class MatchResult:
     source_kind: str = "test_subset"
     is_group_photo: bool = False
     sorted_copy_path: Optional[str] = None
+    class_folder: Optional[str] = None
+    is_class_photo: bool = False
 
 
 def _best_reference_match(
@@ -54,6 +55,8 @@ def _best_reference_match(
     tolerance: float,
     db_path: Path,
 ) -> tuple[Optional[str], Optional[float], Optional[str]]:
+    from database import iter_reference_embeddings
+
     best_student: Optional[str] = None
     best_distance = float("-inf")
     best_reference_file: Optional[str] = None

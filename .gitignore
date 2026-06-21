@@ -1,21 +1,23 @@
 .venv/
-dist/
 __pycache__/
 *.py[cod]
 .DS_Store
+install.log
 
-# --- Anonymity: never commit student data or identifiers ---
+# App icons (keep macos/ assets)
+*.png
+!macos/AppIcon.png
+*.icns
+!macos/AppIcon.icns
 
-# Entire local data tree (folder names, photos)
-data/*/*
+# Local data & reports — never commit photos or student names
+data/**/*
+!data/.gitkeep
+results/**/*
+!results/.gitkeep
 
-# Generated reports (match_report_*.json/csv, manifests, etc.)
-results/*/*
-
-# Photos / media anywhere in the repo
 *.jpg
 *.jpeg
-*.png
 *.webp
 *.bmp
 *.tif
@@ -24,18 +26,11 @@ results/*/*
 *.raw
 *.dng
 
-# Databases and embedding cache
 *.db
 *.sqlite
 *.sqlite3
-
-# Generated match reports (if saved outside data/)
 match_report_*.json
 match_report_*.csv
 
-# Local env / secrets
 .env
 .env.*
-
-# Installer log (may contain local paths)
-install.log

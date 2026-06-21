@@ -8,8 +8,38 @@ from typing import Generator
 import numpy as np
 from PIL import Image
 
-from config import IMAGE_EXTENSIONS, MAX_IMAGE_WIDTH
+from config import (
+    CLASS_FOLDER_PREFIX,
+    CLASS_PHOTOS_FOLDER,
+    GROUP_OUTPUT_FOLDER,
+    IMAGE_EXTENSIONS,
+    MAX_IMAGE_WIDTH,
+    UNMATCHED_FOLDER,
+)
 from group_photos import is_group_reference_folder
+
+
+def is_sort_output_segment(name: str) -> bool:
+    """True if a top-level folder name is produced by the sorter (skip when re-scanning in place)."""
+    if name in (UNMATCHED_FOLDER, CLASS_PHOTOS_FOLDER, GROUP_OUTPUT_FOLDER):
+        return True
+    if name.startswith(CLASS_FOLDER_PREFIX):
+        return True
+    if name.startswith("Person_"):
+        return True
+    if name.startswith("run_"):
+        return True
+    return False
+
+
+def _skip_in_place_input(path: Path, root: Path) -> bool:
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        return True
+    if not rel.parts:
+        return False
+    return is_sort_output_segment(rel.parts[0])
 
 
 def is_image_file(path: Path) -> bool:
@@ -45,7 +75,7 @@ def ground_truth_labels(
     *,
     include_group_folder: bool = True,
 ) -> dict[str, str]:
-    """Map image filename → ground-truth folder name (student or Grupo)."""
+    """Map image filename → ground-truth folder name (student or _group_photos)."""
     labels: dict[str, str] = {}
     for student, image_path in iter_ground_truth_images(
         ground_truth_dir, include_group_folder=include_group_folder
@@ -61,6 +91,34 @@ def ground_truth_labels(
 
 def iter_test_subset_images(directory: Path) -> Generator[Path, None, None]:
     yield from iter_image_files(directory)
+
+
+def iter_images_recursive(directory: Path) -> Generator[Path, None, None]:
+    """All images under directory (any depth), sorted by path."""
+    yield from iter_sort_input_images(directory, recursive=True, in_place=False)
+
+
+def iter_sort_input_images(
+    directory: Path,
+    *,
+    recursive: bool = True,
+    in_place: bool = False,
+) -> Generator[Path, None, None]:
+    """Images to scan for sorting; skips existing sort output folders when in_place."""
+    if not directory.is_dir():
+        return
+    if recursive:
+        for path in sorted(directory.rglob("*")):
+            if not is_image_file(path):
+                continue
+            if in_place and _skip_in_place_input(path, directory):
+                continue
+            yield path
+    else:
+        for path in iter_image_files(directory):
+            if in_place and _skip_in_place_input(path, directory):
+                continue
+            yield path
 
 
 def iter_match_sources(

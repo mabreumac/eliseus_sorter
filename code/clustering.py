@@ -37,11 +37,7 @@ class FaceClusterer:
             self._add_cluster(embedding)
             return 0, 1.0
 
-        similarities = [
-            cosine_similarity(embedding, centroid) for centroid in self._centroids
-        ]
-        best_index = int(np.argmax(similarities))
-        best_similarity = similarities[best_index]
+        best_index, best_similarity = self.find_best_cluster(embedding)
 
         if best_similarity >= self.similarity_threshold:
             self._update_centroid(best_index, embedding)
@@ -49,6 +45,23 @@ class FaceClusterer:
 
         new_index = self._add_cluster(embedding)
         return new_index, 1.0
+
+    def find_best_cluster(self, embedding: np.ndarray) -> tuple[int, float]:
+        embedding = normalize_embedding(embedding)
+        if not self._centroids:
+            return -1, -1.0
+        similarities = [
+            cosine_similarity(embedding, centroid) for centroid in self._centroids
+        ]
+        best_index = int(np.argmax(similarities))
+        return best_index, similarities[best_index]
+
+    def assign_to_cluster(self, cluster_index: int, embedding: np.ndarray) -> None:
+        self._update_centroid(cluster_index, normalize_embedding(embedding))
+
+    def add_cluster(self, embedding: np.ndarray) -> int:
+        """Always create a new cluster (used when seeding a class photo)."""
+        return self._add_cluster(normalize_embedding(embedding))
 
     def assign_batch(self, embeddings: list[np.ndarray]) -> list[tuple[int, float]]:
         return [self.assign(embedding) for embedding in embeddings]

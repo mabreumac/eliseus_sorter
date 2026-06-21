@@ -1,53 +1,85 @@
 # Eliseus Sorter
 
-Sorts school photos by face into folders — no names required upfront.
+Sort school photos by face into class and student folders. Everything runs on your Mac — nothing is uploaded.
 
-Give it a folder of unsorted photos and an output folder. It detects faces, groups similar ones together, and copies files into `Person_001`, `Person_002`, … Multi-face photos go to `Grupo`. Originals are never moved.
-
-Everything runs locally on your Mac (InsightFace). No cloud upload.
+**Requires macOS 12 or later.**
 
 ---
 
-## Mac app
+## Install
 
-1. Double-click **`Install to Applications.command`**
-2. Open **Eliseus Sorter** from Applications (or Spotlight)
-3. On first launch, click **Install** in the dialog (~10–15 min, one time)
-4. Choose **Input** and **Output**, then click **Sort photos**
+Double-click **`installer.command`**, or run in Terminal:
 
-If macOS blocks the app: right-click → **Open** → **Open**.
+```bash
+bash installer.command
+```
+
+Open **Eliseus Sorter** from Applications (or Spotlight).
+
+The first time you open the app, click **Install** when asked. This downloads libraries once (~10–15 minutes, internet required).
+
+If macOS says the app is from an unidentified developer: **right-click the app → Open → Open**.
 
 ---
 
-## CLI
+## Use the app
 
-One-time setup:
+1. **Input** — folder with your photos  
+2. **Output** — where sorted copies should go  
+3. **Naming ref** *(optional)* — reference portraits (see below)  
+4. **Class if faces >** — photos with more faces than this count define a class (default: 5)  
+5. Click **Sort photos**
 
-```bash
-bash code/install.sh
-```
-
-Sort photos:
-
-```bash
-python code/main.py --input /path/to/photos --output /path/to/sorted
-```
-
-Or launch the GUI from the project folder:
-
-```bash
-bash code/launch.sh
-```
+Original photos are never moved or deleted.
 
 ---
 
-## Output
+## Optional: name students automatically
 
-| Folder | Contents |
-|--------|----------|
-| `Person_001/`, `Person_002/`, … | One person per folder |
-| `Grupo/` | Photos with multiple faces |
-| `_unmatched/` | No face detected |
-| `_sort_log.csv` | Copy log |
+Point **Naming ref** at a folder like this — one subfolder per student, one clear portrait each:
 
-Requires **Python 3.10+** and **macOS 12+**. First run downloads face models (~100 MB).
+```
+naming_reference/
+  Maria_Silva/
+    portrait.jpg
+  Joao_Santos/
+    photo.jpg
+```
+
+Matched folders are renamed from `Person_001` to the subfolder name.
+
+---
+
+## What you get
+
+```
+output/
+  class_001/
+    _class_photos/      ← large class group shot
+    _group_photos/      ← smaller group photos
+    Maria_Silva/        ← one student (or Person_001)
+  _unmatched/           ← no face detected
+```
+
+If your **Input** folder has subfolders, each is sorted separately into `run_folder_name/` under **Output**.
+
+---
+
+## Help
+
+| Issue | Fix |
+|-------|-----|
+| App won’t open | Right-click → **Open** → **Open**; check `~/Library/Application Support/Eliseus Sorter/logs/app.log` |
+| Two copies of the app | Use **Applications** only; remove any old copy from the Dock or project folder |
+| Setup failed | See `~/Library/Application Support/Eliseus Sorter/logs/install.log` |
+| Slow first sort | Normal — face models download once (~100 MB) |
+
+Settings and logs: `~/Library/Application Support/Eliseus Sorter/`
+
+---
+
+## Privacy
+
+All face detection and sorting happens on your computer. Photos stay where you put them unless you copy them elsewhere.
+
+For development and benchmarking, see [DEVELOPING.md](DEVELOPING.md).
