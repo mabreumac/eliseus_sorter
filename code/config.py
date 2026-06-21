@@ -1,16 +1,17 @@
 """Central configuration for Eliseus Sorter."""
 
-from pathlib import Path
-
-# Project roots (data/ lives beside code/)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
-GROUND_TRUTH_DIR = DATA_DIR / "ground_truth"
-TEST_SUBSET_DIR = DATA_DIR / "test_subset"
-OUTPUT_DIR = DATA_DIR / "output"
-
-# SQLite cache
-DATABASE_PATH = DATA_DIR / "school_photos.db"
+from app_paths import (  # noqa: F401 — re-export path constants
+    DATA_DIR,
+    DATABASE_PATH,
+    GROUND_TRUTH_DIR,
+    GROUP_PHOTOS_DIR,
+    OUTPUT_DIR,
+    PROJECT_ROOT,
+    SORTED_STUDENTS_DIR,
+    TEST_SUBSET_DIR,
+    ensure_data_dirs,
+    is_app_bundle,
+)
 
 # Face matching
 MATCH_TOLERANCE = 0.6  # Euclidean distance; lower = stricter

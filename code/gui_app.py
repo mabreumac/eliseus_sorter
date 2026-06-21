@@ -21,13 +21,17 @@ if __name__ == "__main__" and __package__ is None:
 
 import customtkinter as ctk
 
+from app_paths import ensure_data_dirs, is_app_bundle
 from config import (
     DATABASE_PATH,
     GROUND_TRUTH_DIR,
+    GROUP_PHOTOS_DIR,
     MATCH_TOLERANCE,
     OUTPUT_DIR,
+    SORTED_STUDENTS_DIR,
     TEST_SUBSET_DIR,
 )
+from group_photos import GROUP_PHOTO_MODE_LABELS, GroupPhotoMode, GroupPhotoSettings
 from database import count_reference_faces, count_students
 from pipeline import (
     PipelineConfig,
@@ -38,7 +42,7 @@ from pipeline import (
 from reporting import format_build_stats, format_result_line
 
 APP_TITLE = "Eliseus Sorter"
-WINDOW_SIZE = "980x760"
+WINDOW_SIZE = "980x900"
 ACCENT = "#2D6A4F"
 ACCENT_HOVER = "#40916C"
 
@@ -84,6 +88,17 @@ class PathSelector(ctk.CTkFrame):
         return Path(self._var.get().strip())
 
 
+class OptionalPathSelector(PathSelector):
+    """Path field that may be left empty."""
+
+    @property
+    def optional_path(self) -> Optional[Path]:
+        text = self._var.get().strip()
+        if not text:
+            return None
+        return Path(text)
+
+
 class EliseusSorterApp(ctk.CTk):
     """Main application window."""
 
@@ -96,6 +111,9 @@ class EliseusSorterApp(ctk.CTk):
         self.geometry(WINDOW_SIZE)
         self.minsize(860, 640)
 
+        if is_app_bundle():
+            ensure_data_dirs()
+
         self._cancel_event = threading.Event()
         self._worker: Optional[threading.Thread] = None
         self._ui_queue: queue.Queue[tuple[Callable[[], None], tuple, dict]] = queue.Queue()
@@ -105,7 +123,7 @@ class EliseusSorterApp(ctk.CTk):
 
     def _build_layout(self) -> None:
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(3, weight=1)
+        self.grid_rowconfigure(4, weight=1)
 
         header = ctk.CTkFrame(self, corner_radius=12)
         header.grid(row=0, column=0, padx=20, pady=(20, 12), sticky="ew")
@@ -147,8 +165,65 @@ class EliseusSorterApp(ctk.CTk):
         self.output_dir = PathSelector(paths_card, "Reports output", OUTPUT_DIR)
         self.output_dir.grid(row=4, column=0, padx=16, pady=(6, 14), sticky="ew")
 
+        group_card = ctk.CTkFrame(self, corner_radius=12)
+        group_card.grid(row=2, column=0, padx=20, pady=8, sticky="ew")
+        group_card.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            group_card,
+            text="Group photos",
+            font=ctk.CTkFont(size=15, weight="bold"),
+        ).grid(row=0, column=0, padx=16, pady=(14, 4), sticky="w")
+        ctk.CTkLabel(
+            group_card,
+            text="Optional folder of class/group shots. Choose how multiple faces are handled.",
+            font=ctk.CTkFont(size=12),
+            text_color=("gray30", "gray70"),
+        ).grid(row=1, column=0, padx=16, pady=(0, 8), sticky="w")
+
+        self.group_photos = OptionalPathSelector(
+            group_card, "Group photos folder", GROUP_PHOTOS_DIR
+        )
+        self.group_photos.grid(row=2, column=0, padx=16, pady=6, sticky="ew")
+
+        mode_row = ctk.CTkFrame(group_card, fg_color="transparent")
+        mode_row.grid(row=3, column=0, padx=16, pady=6, sticky="ew")
+        mode_row.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(mode_row, text="Multi-face mode", width=150, anchor="w").grid(
+            row=0, column=0, padx=(0, 8), sticky="w"
+        )
+        self.group_mode_var = tk.StringVar(
+            value=GROUP_PHOTO_MODE_LABELS[GroupPhotoMode.FIRST_FACE]
+        )
+        self.group_mode_menu = ctk.CTkOptionMenu(
+            mode_row,
+            variable=self.group_mode_var,
+            values=list(GROUP_PHOTO_MODE_LABELS.values()),
+            fg_color=ACCENT,
+            button_color=ACCENT,
+            button_hover_color=ACCENT_HOVER,
+        )
+        self.group_mode_menu.grid(row=0, column=1, sticky="ew")
+
+        self.sort_switch = ctk.CTkSwitch(
+            group_card,
+            text="Copy matched group photos into per-student folders",
+            command=self._on_sort_switch_toggle,
+            progress_color=ACCENT,
+            button_color=ACCENT,
+            button_hover_color=ACCENT_HOVER,
+        )
+        self.sort_switch.grid(row=4, column=0, padx=16, pady=(8, 4), sticky="w")
+
+        self.sorted_output = PathSelector(
+            group_card, "Sorted output folder", SORTED_STUDENTS_DIR
+        )
+        self.sorted_output.grid(row=5, column=0, padx=16, pady=(6, 14), sticky="ew")
+        self._on_sort_switch_toggle()
+
         settings_card = ctk.CTkFrame(self, corner_radius=12)
-        settings_card.grid(row=2, column=0, padx=20, pady=8, sticky="ew")
+        settings_card.grid(row=3, column=0, padx=20, pady=8, sticky="ew")
         settings_card.grid_columnconfigure(1, weight=1)
 
         ctk.CTkLabel(
@@ -217,7 +292,7 @@ class EliseusSorterApp(ctk.CTk):
         self.cancel_btn.grid(row=0, column=3, padx=4, pady=4, sticky="ew")
 
         progress_card = ctk.CTkFrame(self, corner_radius=12)
-        progress_card.grid(row=3, column=0, padx=20, pady=8, sticky="nsew")
+        progress_card.grid(row=4, column=0, padx=20, pady=8, sticky="nsew")
         progress_card.grid_columnconfigure(0, weight=1)
         progress_card.grid_rowconfigure(3, weight=1)
 
@@ -251,13 +326,35 @@ class EliseusSorterApp(ctk.CTk):
     def _on_tolerance_change(self, _value: float) -> None:
         self.tolerance_label.configure(text=self._tolerance_text())
 
+    def _on_sort_switch_toggle(self) -> None:
+        enabled = bool(self.sort_switch.get())
+        state = "normal" if enabled else "disabled"
+        self.sorted_output.entry.configure(state=state)
+        for child in self.sorted_output.winfo_children():
+            if isinstance(child, ctk.CTkButton):
+                child.configure(state=state)
+
+    def _selected_group_mode(self) -> GroupPhotoMode:
+        label = self.group_mode_var.get()
+        for mode, text in GROUP_PHOTO_MODE_LABELS.items():
+            if text == label:
+                return mode
+        return GroupPhotoMode.FIRST_FACE
+
     def _pipeline_config(self) -> PipelineConfig:
+        group_settings = GroupPhotoSettings(
+            mode=self._selected_group_mode(),
+            group_photos_dir=self.group_photos.optional_path,
+            sort_to_student_folders=bool(self.sort_switch.get()),
+            sorted_output_dir=self.sorted_output.path,
+        )
         return PipelineConfig(
             ground_truth_dir=self.ground_truth.path,
             test_subset_dir=self.test_subset.path,
             database_path=self.database.path,
             output_dir=self.output_dir.path,
             tolerance=float(self.tolerance_var.get()),
+            group_settings=group_settings,
         )
 
     def _set_running(self, running: bool) -> None:
@@ -271,9 +368,15 @@ class EliseusSorterApp(ctk.CTk):
             self.database.entry,
             self.output_dir.entry,
             self.tolerance_slider,
+            self.group_photos.entry,
+            self.group_mode_menu,
+            self.sort_switch,
+            self.sorted_output.entry,
         ):
             widget.configure(state=state)
         self.cancel_btn.configure(state="normal" if running else "disabled")
+        if not running:
+            self._on_sort_switch_toggle()
 
     def _request_cancel(self) -> None:
         self._cancel_event.set()
@@ -317,9 +420,16 @@ class EliseusSorterApp(ctk.CTk):
         if mode in ("build", "all") and not config.ground_truth_dir.is_dir():
             messagebox.showerror(APP_TITLE, "Ground truth folder does not exist.")
             return
-        if mode in ("match", "all") and not config.test_subset_dir.is_dir():
-            messagebox.showerror(APP_TITLE, "Test subset folder does not exist.")
-            return
+        if mode in ("match", "all"):
+            group_dir = config.group_settings.resolved_group_photos_dir()
+            has_group = group_dir is not None and group_dir.is_dir()
+            has_test = config.test_subset_dir.is_dir()
+            if not has_test and not has_group:
+                messagebox.showerror(
+                    APP_TITLE,
+                    "Add photos to the test subset and/or group photos folder.",
+                )
+                return
 
         self._cancel_event.clear()
         self._set_running(True)
@@ -392,6 +502,8 @@ class EliseusSorterApp(ctk.CTk):
             self._append_log(format_result_line(item))
         if result.json_path and result.csv_path:
             self._append_log(f"\nReports:\n  {result.json_path}\n  {result.csv_path}")
+        if getattr(result, "sorted_output_dir", None):
+            self._append_log(f"\nSorted copies:\n  {result.sorted_output_dir}")
 
     def _finish_error(self, message: str) -> None:
         self._append_log(f"ERROR: {message}")

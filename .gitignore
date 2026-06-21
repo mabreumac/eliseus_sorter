@@ -1,4 +1,5 @@
 .venv/
+dist/
 __pycache__/
 *.py[cod]
 .DS_Store
@@ -32,3 +33,6 @@ match_report_*.csv
 # Local env / secrets
 .env
 .env.*
+
+# Installer log (may contain local paths)
+install.log

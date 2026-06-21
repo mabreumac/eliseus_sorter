@@ -2,36 +2,121 @@
 # One-time setup: virtual environment + Python dependencies (macOS).
 set -euo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENV_DIR="${PROJECT_ROOT}/.venv"
-PYTHON="${PYTHON:-python3}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=paths.sh
+source "${SCRIPT_DIR}/paths.sh"
+LOG_FILE="${PROJECT_ROOT}/install.log"
+PYTHON="${PYTHON:-}"
 
 info()  { printf '\n\033[1;34m▸ %s\033[0m\n' "$1"; }
 ok()    { printf '  \033[1;32m✓ %s\033[0m\n' "$1"; }
 warn()  { printf '  \033[1;33m! %s\033[0m\n' "$1"; }
 fail()  { printf '\n\033[1;31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
 
+exec > >(tee -a "${LOG_FILE}") 2>&1
+
 cd "${PROJECT_ROOT}"
+
+python_version_ok() {
+  local exe="$1"
+  command -v "${exe}" >/dev/null 2>&1 || return 1
+  "${exe}" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null
+}
+
+python_version_label() {
+  local exe="$1"
+  "${exe}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'
+}
+
+find_suitable_python() {
+  local candidate
+
+  if [[ -n "${PYTHON}" ]]; then
+    if python_version_ok "${PYTHON}"; then
+      echo "${PYTHON}"
+      return 0
+    fi
+    warn "PYTHON=${PYTHON} is set but is older than 3.10 — searching for another…"
+  fi
+
+  local -a candidates=(
+    python3.12 python3.11 python3.10
+    /opt/homebrew/bin/python3.12 /opt/homebrew/bin/python3.11 /opt/homebrew/bin/python3.10
+    /usr/local/bin/python3.12 /usr/local/bin/python3.11 /usr/local/bin/python3.10
+    python3
+  )
+
+  for candidate in "${candidates[@]}"; do
+    if python_version_ok "${candidate}"; then
+      echo "${candidate}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+install_python_with_homebrew() {
+  if ! command -v brew >/dev/null 2>&1; then
+    return 1
+  fi
+
+  info "Installing Python 3.12 with Homebrew (one-time)"
+  echo "  macOS ships with Python 3.9, which is too old for this app."
+  echo "  This step downloads a newer Python — it may take a few minutes."
+  brew install python@3.12
+
+  local brew_python
+  brew_python="$(brew --prefix python@3.12)/bin/python3.12"
+  if python_version_ok "${brew_python}"; then
+    echo "${brew_python}"
+    return 0
+  fi
+  return 1
+}
+
+resolve_python() {
+  local found
+
+  if found="$(find_suitable_python)"; then
+    echo "${found}"
+    return 0
+  fi
+
+  warn "Python 3.10+ not found on this Mac."
+  if found="$(install_python_with_homebrew)"; then
+    echo "${found}"
+    return 0
+  fi
+
+  local system_version="unknown"
+  if command -v python3 >/dev/null 2>&1; then
+    system_version="$(python_version_label python3)"
+  fi
+
+  fail "Python 3.10 or newer is required (your python3 is ${system_version}).
+
+Easiest fix — install Homebrew, then run Install again:
+  https://brew.sh
+
+Or install Python manually:
+  1. Open https://www.python.org/downloads/macos/
+  2. Download Python 3.12 (or newer)
+  3. Run the installer
+  4. Double-click install.command again
+
+Advanced (if Homebrew is already installed):
+  brew install python@3.12
+  bash scripts/install.sh"
+}
 
 info "Eliseus Sorter — installation"
 echo "  Project folder: ${PROJECT_ROOT}"
+echo "  Log file:       ${LOG_FILE}"
 
-if ! command -v "${PYTHON}" >/dev/null 2>&1; then
-  fail "Python 3 was not found.
-
-Install it using one of these options:
-  • macOS will offer Command Line Tools when needed — accept that dialog.
-  • Or install from https://www.python.org/downloads/macos/
-  • Or run: xcode-select --install"
-fi
-
-PY_VERSION="$("${PYTHON}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-PY_MAJOR="${PY_VERSION%%.*}"
-PY_MINOR="${PY_VERSION#*.}"
-if [[ "${PY_MAJOR}" -lt 3 ]] || [[ "${PY_MAJOR}" -eq 3 && "${PY_MINOR}" -lt 10 ]]; then
-  fail "Python 3.10 or newer is required (found ${PY_VERSION})."
-fi
-ok "Python ${PY_VERSION}"
+PYTHON="$(resolve_python)"
+PY_VERSION="$(python_version_label "${PYTHON}")"
+ok "Python ${PY_VERSION} (${PYTHON})"
 
 if ! xcode-select -p >/dev/null 2>&1; then
   warn "Xcode Command Line Tools are not installed yet."
@@ -42,21 +127,80 @@ if ! xcode-select -p >/dev/null 2>&1; then
 fi
 ok "Xcode Command Line Tools"
 
+if [[ "${PROJECT_ROOT}" == *"CloudStorage"* ]] || [[ "${PROJECT_ROOT}" == *"Google Drive"* ]]; then
+  warn "Project is on Google Drive."
+  echo "  Python packages will be stored locally at: ${VENV_DIR}"
+  if [[ -d "${PROJECT_ROOT}/.venv" ]]; then
+    warn "Removing old .venv inside Google Drive (causes install errors)."
+    rm -rf "${PROJECT_ROOT}/.venv"
+  fi
+fi
+
 info "Creating virtual environment"
+if [[ -d "${VENV_DIR}" ]]; then
+  if ! "${VENV_DIR}/bin/python" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+    warn "Removing old .venv (built with Python < 3.10)"
+    rm -rf "${VENV_DIR}"
+  fi
+fi
+
 if [[ ! -d "${VENV_DIR}" ]]; then
-  "${PYTHON}" -m venv "${VENV_DIR}"
-  ok "Created .venv"
+  "${PYTHON}" -m venv --copies "${VENV_DIR}"
+  ok "Created .venv with Python ${PY_VERSION}"
 else
   ok "Using existing .venv"
 fi
 
 # shellcheck source=/dev/null
 source "${VENV_DIR}/bin/activate"
-python -m pip install --upgrade pip setuptools wheel >/dev/null
+python -m pip install --upgrade pip setuptools wheel
 ok "pip ready"
+
+ensure_tkinter() {
+  if python -c "import tkinter" 2>/dev/null; then
+    ok "Tkinter (GUI) ready"
+    return 0
+  fi
+
+  warn "Tkinter is missing — required for the desktop window."
+  local py_mm
+  py_mm="$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+
+  if command -v brew >/dev/null 2>&1; then
+    echo "  Installing python-tk@${py_mm} via Homebrew…"
+    if brew install "python-tk@${py_mm}"; then
+      if python -c "import tkinter" 2>/dev/null; then
+        ok "Tkinter installed"
+        return 0
+      fi
+    fi
+  fi
+
+  fail "Tkinter is not available for Python ${py_mm}.
+
+Homebrew Python needs a separate Tk package. In Terminal, run:
+  brew install python-tk@${py_mm}
+
+Then double-click Install.command again.
+
+Or install Python from https://www.python.org/downloads/macos/ (includes Tk)
+and run Install again."
+}
+
+ensure_tkinter
 
 install_dlib() {
   info "Installing face recognition libraries (this may take several minutes)"
+
+  if python -c "import dlib" 2>/dev/null; then
+    ok "dlib already installed"
+    return 0
+  fi
+
+  if command -v brew >/dev/null 2>&1; then
+    brew install cmake dlib 2>/dev/null || brew install cmake
+  fi
+
   if python -m pip install dlib; then
     ok "dlib installed"
     return 0
@@ -65,29 +209,32 @@ install_dlib() {
   warn "dlib did not install on the first try."
 
   if command -v brew >/dev/null 2>&1; then
-    echo "  Trying Homebrew cmake helper…"
-    brew install cmake
-    python -m pip install dlib
-    ok "dlib installed (with Homebrew cmake)"
+    brew install cmake pkg-config
+    python -m pip install --no-cache-dir dlib
+    ok "dlib installed (retry)"
     return 0
   fi
 
-  fail "Could not install dlib automatically.
-
-Try installing Homebrew (https://brew.sh), then run Install again:
-  /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"
-
-Or ask for help and mention your macOS version and Python version (${PY_VERSION})."
+  fail "Could not install dlib. Install Homebrew (https://brew.sh) and run Install again.
+See install.log for details."
 }
 
 install_dlib
 
 info "Installing remaining packages"
 python -m pip install -r "${PROJECT_ROOT}/requirements.txt"
-ok "All packages installed"
+ok "Python packages installed"
+
+info "Installing face recognition models (~100 MB, local files)"
+python -m pip install --upgrade "setuptools>=65.0.0"
+if ! python "${PROJECT_ROOT}/scripts/install_models.py"; then
+  fail "Could not install face recognition model files. See install.log"
+fi
 
 info "Verifying installation"
-python "${PROJECT_ROOT}/scripts/verify_install.py"
+if ! python "${PROJECT_ROOT}/scripts/verify_install.py"; then
+  fail "Installation verification failed. See messages above and install.log"
+fi
 ok "Verification passed"
 
 cat <<EOF
@@ -100,5 +247,8 @@ Next step:
 Put your photos here:
   data/ground_truth/<student_name>/*.jpg
   data/test_subset/*.jpg
+
+Log saved to: ${LOG_FILE}
+Python environment: ${VENV_DIR}
 
 EOF

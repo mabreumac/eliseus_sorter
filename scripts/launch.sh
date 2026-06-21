@@ -2,8 +2,9 @@
 # Launch the desktop app (macOS).
 set -euo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENV_DIR="${PROJECT_ROOT}/.venv"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=paths.sh
+source "${SCRIPT_DIR}/paths.sh"
 APP_PY="${PROJECT_ROOT}/code/gui_app.py"
 
 cd "${PROJECT_ROOT}"
@@ -19,10 +20,24 @@ fi
 # shellcheck source=/dev/null
 source "${VENV_DIR}/bin/activate"
 
-if ! python "${PROJECT_ROOT}/scripts/verify_install.py" >/dev/null 2>&1; then
+if ! python -c "import tkinter" 2>/dev/null; then
+  PY_MM="$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
   echo ""
-  echo "Something is wrong with the installation."
+  echo "Tkinter is not installed for Python ${PY_MM} (the GUI cannot start)."
+  echo ""
+  echo "Quick fix — run in Terminal:"
+  echo "  brew install python-tk@${PY_MM}"
+  echo ""
+  echo "Then double-click  Install.command  again."
+  echo ""
+  exit 1
+fi
+
+if ! python "${PROJECT_ROOT}/scripts/verify_install.py"; then
+  echo ""
+  echo "Installation verification failed."
   echo "Please run  Install.command  again."
+  echo "Details: install.log"
   echo ""
   exit 1
 fi
