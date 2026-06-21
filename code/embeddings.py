@@ -9,6 +9,7 @@ from typing import Optional
 import cv2
 import numpy as np
 
+from config import MIN_FACE_AREA_RATIO, MIN_FACE_DET_SCORE
 from face_engine import get_face_analysis
 from group_photos import GroupPhotoMode
 
@@ -37,6 +38,32 @@ class MultiFaceEncodingResult:
 def _face_area(bbox: np.ndarray) -> float:
     x1, y1, x2, y2 = bbox[:4]
     return max(0.0, x2 - x1) * max(0.0, y2 - y1)
+
+
+def _det_score(face: object) -> float:
+    score = getattr(face, "det_score", None)
+    if score is None:
+        return 1.0
+    return float(score)
+
+
+def _filter_significant_faces(detected: list) -> list:
+    """Keep main-subject faces; drop low-confidence and tiny background detections."""
+    if not detected:
+        return []
+
+    max_area = max(_face_area(face.bbox) for face in detected)
+    if max_area <= 0:
+        return list(detected)
+
+    kept: list = []
+    for face in detected:
+        if _det_score(face) < MIN_FACE_DET_SCORE:
+            continue
+        if MIN_FACE_AREA_RATIO > 0 and _face_area(face.bbox) / max_area < MIN_FACE_AREA_RATIO:
+            continue
+        kept.append(face)
+    return kept
 
 
 def _select_face_indices(num_faces: int, areas: list[float], mode: GroupPhotoMode) -> list[int]:
@@ -88,6 +115,10 @@ def encode_faces_from_path(
     except Exception as exc:  # noqa: BLE001
         return MultiFaceEncodingResult(error=str(exc))
 
+    if not detected:
+        return MultiFaceEncodingResult(num_faces=0)
+
+    detected = _filter_significant_faces(detected)
     if not detected:
         return MultiFaceEncodingResult(num_faces=0)
 

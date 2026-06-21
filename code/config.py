@@ -41,6 +41,11 @@ ONNX_INTRA_OP_THREADS = 0
 SCAN_WORKERS = 0
 DEFAULT_SCAN_WORKERS = 1
 
+# Drop faint / distant faces (common in bokeh backgrounds). Relative to largest face in image.
+# Lower MIN_FACE_AREA_RATIO ignores more small background detections; 0 disables size filter.
+MIN_FACE_DET_SCORE = 0.45
+MIN_FACE_AREA_RATIO = 0.12
+
 # Resize large photos before detection (lower = faster, less accurate on tiny faces)
 MAX_IMAGE_WIDTH = 1024
 
