@@ -13,7 +13,7 @@ import numpy as np
 
 from sort_runtime import SortRuntime
 from class_registry import ClassRegistry
-from clustering import FaceClusterer, person_id_label
+from clustering import FaceClusterer, format_person_folder_label, person_id_label
 from config import (
     CLASS_PHOTOS_FOLDER,
     DEFAULT_FACE_SENSITIVITY,
@@ -45,6 +45,12 @@ from naming_reference import (
     build_naming_index,
     build_person_rename_map,
     resolve_person_label,
+)
+from person_order import (
+    build_person_order,
+    collect_class_cluster_appearances,
+    collect_flat_cluster_appearances,
+    image_path_order_index,
 )
 from student_sorting import apply_production_sorting
 
@@ -297,12 +303,19 @@ def _resolve_person_renames(
     )
 
 
-def _rename_log(rename_map: dict[ClusterKey, str]) -> dict[str, str]:
+def _rename_log(
+    rename_map: dict[ClusterKey, str],
+    person_order_remap: dict[ClusterKey, int] | None = None,
+) -> dict[str, str]:
     logged: dict[str, str] = {}
     for (class_folder, cluster_index), name in rename_map.items():
-        label = person_id_label(cluster_index)
-        key = f"{class_folder}/{label}" if class_folder else label
-        logged[key] = name
+        key = (class_folder, cluster_index)
+        if person_order_remap is not None and key in person_order_remap:
+            label = format_person_folder_label(person_order_remap[key], name)
+        else:
+            label = format_person_folder_label(cluster_index, name)
+        log_key = f"{class_folder}/{label}" if class_folder else label
+        logged[log_key] = label
     return logged
 
 
@@ -314,6 +327,7 @@ def _build_flat_sort_results(
     *,
     duplicate_group_photos: bool = False,
     rename_map: dict[ClusterKey, str] | None = None,
+    person_order_remap: dict[ClusterKey, int] | None = None,
     error: Optional[str] = None,
 ) -> list[MatchResult]:
     rename_map = rename_map or {}
@@ -381,7 +395,11 @@ def _build_flat_sort_results(
             continue
         seen_clusters.add(cluster_index)
         person_label = resolve_person_label(
-            cluster_index, None, rename_map, person_id_label(cluster_index)
+            cluster_index,
+            None,
+            rename_map,
+            person_id_label(cluster_index),
+            person_order_remap=person_order_remap,
         )
         results.append(
             MatchResult(
@@ -435,6 +453,7 @@ def _build_class_sort_results(
     *,
     duplicate_group_photos: bool = False,
     rename_map: dict[ClusterKey, str] | None = None,
+    person_order_remap: dict[ClusterKey, int] | None = None,
     error: Optional[str] = None,
 ) -> list[MatchResult]:
     rename_map = rename_map or {}
@@ -518,7 +537,11 @@ def _build_class_sort_results(
             continue
         seen_person.add(person_key)
         person_label = resolve_person_label(
-            cluster_index, cls_label, rename_map, person_id_label(cluster_index)
+            cluster_index,
+            cls_label,
+            rename_map,
+            person_id_label(cluster_index),
+            person_order_remap=person_order_remap,
         )
         results.append(
             MatchResult(
@@ -595,6 +618,15 @@ def _run_flat_sort(
         should_cancel,
     )
 
+    path_order = image_path_order_index(image_paths)
+    person_order_remap = build_person_order(
+        cluster_appearances=collect_flat_cluster_appearances(
+            path_order=path_order,
+            per_image_faces=per_image_faces,
+            cluster_assignments=cluster_assignments,
+        ),
+    )
+
     raw_results: list[MatchResult] = []
     t_copy = time.perf_counter()
     for index, (image_path, faces, error) in enumerate(per_image_faces, start=1):
@@ -610,6 +642,7 @@ def _run_flat_sort(
                 settings,
                 duplicate_group_photos=config.duplicate_group_photos,
                 rename_map=rename_map,
+                person_order_remap=person_order_remap,
                 error=error,
             )
         )
@@ -638,7 +671,7 @@ def _run_flat_sort(
         matched_count=matched,
         unmatched_count=len(results) - matched,
         num_clusters=clusterer.num_clusters,
-        person_renames=_rename_log(rename_map),
+        person_renames=_rename_log(rename_map, person_order_remap),
         runtime=runtime,
     )
 
@@ -749,6 +782,15 @@ def _run_class_sort(
         should_cancel,
     )
 
+    path_order = image_path_order_index(image_paths)
+    person_order_remap = build_person_order(
+        cluster_appearances=collect_class_cluster_appearances(
+            path_order=path_order,
+            per_image_faces=per_image_faces,
+            face_assignments=face_assignments,
+        ),
+    )
+
     raw_results: list[MatchResult] = []
     t_copy = time.perf_counter()
     for index, (image_path, faces, error) in enumerate(per_image_faces, start=1):
@@ -766,6 +808,7 @@ def _run_class_sort(
                 settings,
                 duplicate_group_photos=config.duplicate_group_photos,
                 rename_map=rename_map,
+                person_order_remap=person_order_remap,
                 error=error,
             )
         )
@@ -802,7 +845,7 @@ def _run_class_sort(
         unmatched_count=len(results) - matched,
         num_clusters=num_clusters,
         num_classes=registry.num_classes,
-        person_renames=_rename_log(rename_map),
+        person_renames=_rename_log(rename_map, person_order_remap),
         runtime=runtime,
     )
 

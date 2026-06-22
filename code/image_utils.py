@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Generator
 
@@ -20,6 +21,13 @@ from config import (
 )
 from group_photos import is_group_reference_folder
 
+# Sorter output person folders: 001, 002, 001_Maria (legacy: Person_001)
+PERSON_OUTPUT_FOLDER = re.compile(r"^\d{3}(_.*)?$")
+
+
+def is_person_output_folder(name: str) -> bool:
+    return bool(PERSON_OUTPUT_FOLDER.match(name)) or name.startswith("Person_")
+
 
 def is_sort_output_segment(name: str) -> bool:
     """True if a top-level folder name is produced by the sorter (skip when re-scanning in place)."""
@@ -27,7 +35,7 @@ def is_sort_output_segment(name: str) -> bool:
         return True
     if name.startswith(CLASS_FOLDER_PREFIX):
         return True
-    if name.startswith("Person_"):
+    if is_person_output_folder(name):
         return True
     if name.startswith("run_"):
         return True

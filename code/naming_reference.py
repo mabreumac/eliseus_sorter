@@ -10,11 +10,12 @@ from typing import Optional
 
 import numpy as np
 
+from clustering import person_id_label, format_person_folder_label
 from config import MATCH_TOLERANCE, NO_CLASS_FOLDER
 from embeddings import FaceFilterParams, cosine_similarity, encode_faces_from_path, normalize_embedding
 from face_scan import CancelCallback, ProgressCallback, effective_scan_workers, init_scan_worker
 from group_photos import GroupPhotoMode, is_group_reference_folder
-from image_utils import iter_images_recursive
+from image_utils import is_person_output_folder, iter_images_recursive
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,8 @@ def _centroid(embeddings: list[np.ndarray]) -> np.ndarray:
 
 def _is_reference_folder(name: str) -> bool:
     lowered = name.strip().casefold()
+    if is_person_output_folder(name):
+        return False
     if lowered.startswith("person_"):
         return False
     if lowered.startswith("class_"):
@@ -460,9 +463,9 @@ def build_person_rename_map(
         if on_progress and total:
             class_folder, cluster_index = key
             label = (
-                f"{class_folder}/Person_{cluster_index + 1:03d}"
+                f"{class_folder}/{person_id_label(cluster_index)}"
                 if class_folder
-                else f"Person_{cluster_index + 1:03d}"
+                else person_id_label(cluster_index)
             )
             on_progress(
                 "naming_match",
@@ -487,5 +490,15 @@ def resolve_person_label(
     class_folder: Optional[str],
     rename_map: dict[ClusterKey, str],
     default_label: str,
+    *,
+    person_order_remap: dict[ClusterKey, int] | None = None,
 ) -> str:
-    return rename_map.get((class_folder, cluster_index), default_label)
+    key = (class_folder, cluster_index)
+    name = rename_map.get(key)
+
+    if person_order_remap is not None and key in person_order_remap:
+        return format_person_folder_label(person_order_remap[key], name)
+
+    if name:
+        return name
+    return default_label

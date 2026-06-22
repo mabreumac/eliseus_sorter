@@ -9,8 +9,17 @@ import numpy as np
 from embeddings import cosine_similarity, normalize_embedding
 
 
-def person_id_label(cluster_index: int) -> str:
-    return f"Person_{cluster_index + 1:03d}"
+def person_id_label(order_index: int) -> str:
+    """Output folder suffix for person slot (1-based): 001, 002, …"""
+    return f"{order_index + 1:03d}"
+
+
+def format_person_folder_label(order_index: int, name: str | None = None) -> str:
+    """Build folder name: 002 (unnamed) or 001_Maria (named)."""
+    prefix = person_id_label(order_index)
+    if name:
+        return f"{prefix}_{name}"
+    return prefix
 
 
 @dataclass
