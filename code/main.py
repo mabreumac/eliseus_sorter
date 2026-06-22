@@ -63,7 +63,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--flat",
         action="store_true",
-        help="Legacy mode: Person_001 at output root (no class folders)",
+        help="Legacy mode: 001 folders at output root (no class_001 wrapper)",
     )
     parser.add_argument(
         "--naming-reference-skip",

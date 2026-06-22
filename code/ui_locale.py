@@ -62,8 +62,8 @@ def _en() -> Locale:
             ),
             "label_group_faces": "Group if faces >",
             "hint_group_faces": (
-                "Large group images seed roster clusters; "
-                "all nested folders = one photo pool"
+                "Roster photos with more than this many faces may define separate "
+                "classes; otherwise the whole batch is sorted as one class_001"
             ),
             "move_files": "Move files (leave empty source folders; unchecked = copy)",
             "duplicate_group": "Duplicate group photos into person folders",
@@ -181,8 +181,8 @@ def _pt() -> Locale:
             ),
             "label_group_faces": "Grupo se rostos >",
             "hint_group_faces": (
-                "Fotos de grupo grande definem turmas; "
-                "todas as subpastas = um único conjunto de fotos"
+                "Fotos de roster com mais rostos que este limiar podem definir turmas "
+                "separadas; caso contrário todo o lote fica num único class_001"
             ),
             "move_files": "Mover ficheiros (pastas de origem ficam vazias; desmarcado = copiar)",
             "duplicate_group": "Duplicar fotos de grupo nas pastas de cada pessoa",

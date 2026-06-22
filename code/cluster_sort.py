@@ -14,7 +14,7 @@ import numpy as np
 from sort_runtime import SortCancelled, SortRuntime
 
 SORT_COMPLETE_MARKER = ".sort_complete"
-from class_registry import ClassRegistry
+from class_registry import ClassRegistry, class_id_label
 from clustering import FaceClusterer, format_person_folder_label, person_id_label
 from config import (
     CLASS_PHOTOS_FOLDER,
@@ -246,6 +246,66 @@ def _is_class_photo(num_faces: int, min_class_faces: int) -> bool:
     return num_faces > min_class_faces
 
 
+def _image_face_count(faces: list[DetectedFace]) -> int:
+    """Detected face count for one image (after background filter)."""
+    if not faces:
+        return 0
+    return faces[0].num_faces
+
+
+def _class_photo_candidates(
+    per_image_faces: list[tuple[Path, list[DetectedFace], Optional[str]]],
+    min_class_faces: int,
+) -> list[tuple[Path, list[DetectedFace]]]:
+    return [
+        (path, faces)
+        for path, faces, err in per_image_faces
+        if not err and _is_class_photo(_image_face_count(faces), min_class_faces)
+    ]
+
+
+def _count_roster_classes(
+    class_photos: list[tuple[Path, list[DetectedFace]]],
+    tolerance: float,
+) -> int:
+    """How many distinct classes roster photos define (same logic as full class sort)."""
+    if not class_photos:
+        return 0
+    registry = ClassRegistry(similarity_threshold=tolerance)
+    for photo_path, faces in sorted(class_photos, key=lambda item: item[0].name):
+        embeddings = [(face.face_index, face.embedding) for face in faces]
+        registry.register_class_photo(photo_path, embeddings)
+    return registry.num_classes
+
+
+def _scan_input(
+    config: SortConfig,
+    *,
+    on_progress: Optional[ProgressCallback] = None,
+    should_cancel: Optional[CancelCallback] = None,
+) -> tuple[list[Path], list[tuple[Path, list[DetectedFace], Optional[str]]], SortRuntime]:
+    encoding_mode = _encoding_mode_for_clustering(config.group_settings)
+    image_paths = _iter_images(config, config.output_dir)
+    total = len(image_paths)
+    if total == 0:
+        raise ValueError(f"No images found in {config.input_dir}")
+
+    runtime = SortRuntime(num_images=total)
+    t_scan = time.perf_counter()
+    per_image_faces = _scan_all_faces(
+        image_paths,
+        encoding_mode,
+        runtime,
+        scan_workers=config.scan_workers,
+        face_filter=config.face_filter(),
+        on_progress=on_progress,
+        should_cancel=should_cancel,
+    )
+    runtime.scan_seconds = time.perf_counter() - t_scan
+    _raise_if_cancelled(should_cancel)
+    return image_paths, per_image_faces, runtime
+
+
 def _gather_flat_cluster_embeddings(
     all_faces: list[DetectedFace],
     cluster_assignments: dict[tuple[str, int], tuple[int, float]],
@@ -460,6 +520,7 @@ def _build_class_sort_results(
     duplicate_group_photos: bool = False,
     rename_map: dict[ClusterKey, str] | None = None,
     person_order_remap: dict[ClusterKey, int] | None = None,
+    single_class_label: Optional[str] = None,
     error: Optional[str] = None,
 ) -> list[MatchResult]:
     rename_map = rename_map or {}
@@ -467,7 +528,7 @@ def _build_class_sort_results(
     num_faces = faces[0].num_faces if faces else 0
     is_group = num_faces > 1
     is_class = _is_class_photo(num_faces, min_class_faces)
-    class_label = registry.class_for_photo(image_path)
+    class_label = registry.class_for_photo(image_path) or single_class_label
     group_folder = settings.resolved_group_output_folder()
 
     if error:
@@ -686,8 +747,130 @@ def _run_flat_sort(
     )
 
 
+def _run_single_class_sort(
+    config: SortConfig,
+    image_paths: list[Path],
+    per_image_faces: list[tuple[Path, list[DetectedFace], Optional[str]]],
+    runtime: SortRuntime,
+    on_progress: Optional[ProgressCallback] = None,
+    should_cancel: Optional[CancelCallback] = None,
+) -> SortResult:
+    """One class folder for the whole batch — no roster / class photos required."""
+    min_class_faces = config.min_class_faces
+    if min_class_faces is None:
+        min_class_faces = DEFAULT_MIN_CLASS_FACES
+
+    single_class = class_id_label(0)
+    settings = config.group_settings
+    total = len(image_paths)
+
+    if on_progress:
+        on_progress("cluster", 0, 1, "Single class — grouping whole batch as class_001")
+
+    clusterer = FaceClusterer(similarity_threshold=config.tolerance)
+    face_assignments: dict[tuple[str, int], tuple[str, int, float]] = {}
+    all_faces = [face for _, faces, err in per_image_faces if not err for face in faces]
+
+    t_cluster = time.perf_counter()
+    for index, face in enumerate(all_faces, start=1):
+        if should_cancel and should_cancel():
+            break
+        if on_progress and all_faces:
+            on_progress(
+                "cluster",
+                index,
+                len(all_faces),
+                f"Clustering face {index}/{len(all_faces)}",
+            )
+        key = (str(face.image_path.resolve()), face.face_index)
+        cluster_index, similarity = clusterer.assign(face.embedding)
+        face_assignments[key] = (single_class, cluster_index, similarity)
+    runtime.cluster_seconds = time.perf_counter() - t_cluster
+    _raise_if_cancelled(should_cancel)
+
+    registry = ClassRegistry(similarity_threshold=config.tolerance)
+
+    rename_map = _resolve_person_renames(
+        config,
+        _gather_class_cluster_embeddings(per_image_faces, face_assignments),
+        on_progress,
+        should_cancel,
+    )
+
+    path_order = image_path_order_index(image_paths)
+    person_order_remap = build_person_order(
+        cluster_appearances=collect_class_cluster_appearances(
+            path_order=path_order,
+            per_image_faces=per_image_faces,
+            face_assignments=face_assignments,
+        ),
+    )
+
+    raw_results: list[MatchResult] = []
+    t_copy = time.perf_counter()
+    for index, (image_path, faces, error) in enumerate(per_image_faces, start=1):
+        if should_cancel and should_cancel():
+            break
+        if on_progress:
+            on_progress("sort", index, total, f"Sorting: {image_path.name}")
+        raw_results.extend(
+            _build_class_sort_results(
+                image_path,
+                faces,
+                face_assignments,
+                registry,
+                min_class_faces,
+                settings,
+                duplicate_group_photos=config.duplicate_group_photos,
+                rename_map=rename_map,
+                person_order_remap=person_order_remap,
+                single_class_label=single_class,
+                error=error,
+            )
+        )
+
+    _raise_if_cancelled(should_cancel)
+
+    if not raw_results:
+        runtime.copy_seconds = time.perf_counter() - t_copy
+        return SortResult(
+            results=[],
+            output_dir=config.output_dir,
+            num_classes=1,
+            runtime=runtime,
+        )
+
+    results = apply_production_sorting(
+        raw_results,
+        config.output_dir,
+        move_files=config.move_files,
+    )
+    runtime.copy_seconds = time.perf_counter() - t_copy
+
+    from reporting import results_to_dataframe
+
+    log_path = config.output_dir / SORT_LOG_NAME
+    results_to_dataframe(results).to_csv(log_path, index=False)
+
+    matched = sum(1 for r in results if is_known_match(r.matched_student))
+    return SortResult(
+        results=results,
+        output_dir=config.output_dir,
+        log_path=log_path,
+        matched_count=matched,
+        unmatched_count=len(results) - matched,
+        num_clusters=clusterer.num_clusters,
+        num_classes=1,
+        person_renames=_rename_log(rename_map, person_order_remap),
+        runtime=runtime,
+    )
+
+
 def _run_class_sort(
     config: SortConfig,
+    image_paths: list[Path],
+    per_image_faces: list[tuple[Path, list[DetectedFace], Optional[str]]],
+    runtime: SortRuntime,
     on_progress: Optional[ProgressCallback] = None,
     should_cancel: Optional[CancelCallback] = None,
 ) -> SortResult:
@@ -696,35 +879,18 @@ def _run_class_sort(
 
     min_class_faces = config.min_class_faces
     settings = config.group_settings
-    encoding_mode = _encoding_mode_for_clustering(settings)
-    image_paths = _iter_images(config, config.output_dir)
     total = len(image_paths)
-    if total == 0:
-        raise ValueError(f"No images found in {config.input_dir}")
 
-    runtime = SortRuntime(num_images=total)
-    t_scan = time.perf_counter()
-    per_image_faces = _scan_all_faces(
-        image_paths,
-        encoding_mode,
-        runtime,
-        scan_workers=config.scan_workers,
-        face_filter=config.face_filter(),
-        on_progress=on_progress,
-        should_cancel=should_cancel,
-    )
-    runtime.scan_seconds = time.perf_counter() - t_scan
-    _raise_if_cancelled(should_cancel)
-
-    class_photos = [
-        (path, faces)
-        for path, faces, err in per_image_faces
-        if not err and _is_class_photo(len(faces), min_class_faces)
-    ]
+    class_photos = _class_photo_candidates(per_image_faces, min_class_faces)
     if not class_photos:
-        raise ValueError(
-            f"No class photos found — need at least one photo with more than "
-            f"{min_class_faces} faces (try lowering the class face threshold)."
+        raise ValueError("Internal error: multi-class sort without roster photos")
+
+    if on_progress:
+        on_progress(
+            "cluster",
+            0,
+            1,
+            f"Multi-class — {len(class_photos)} roster photo(s) detected",
         )
 
     registry = ClassRegistry(similarity_threshold=config.tolerance)
@@ -869,11 +1035,42 @@ def run_cluster_sort(
     on_progress: Optional[ProgressCallback] = None,
     should_cancel: Optional[CancelCallback] = None,
 ) -> SortResult:
-    """Discover people and copy photos into class/Person folders (or flat Person_X mode)."""
+    """Discover people and copy photos into class/person folders (or flat mode)."""
     config.output_dir.mkdir(parents=True, exist_ok=True)
     if config.min_class_faces is None:
         return _run_flat_sort(config, on_progress, should_cancel)
-    return _run_class_sort(config, on_progress, should_cancel)
+
+    min_class_faces = config.min_class_faces
+    image_paths, per_image_faces, runtime = _scan_input(
+        config, on_progress=on_progress, should_cancel=should_cancel
+    )
+    roster_class_count = _count_roster_classes(
+        _class_photo_candidates(per_image_faces, min_class_faces),
+        config.tolerance,
+    )
+    logger.info(
+        "Roster analysis: %d class(es) detected (threshold > %d faces)",
+        roster_class_count,
+        min_class_faces,
+    )
+
+    if roster_class_count < 2:
+        return _run_single_class_sort(
+            config,
+            image_paths,
+            per_image_faces,
+            runtime,
+            on_progress,
+            should_cancel,
+        )
+    return _run_class_sort(
+        config,
+        image_paths,
+        per_image_faces,
+        runtime,
+        on_progress,
+        should_cancel,
+    )
 
 
 def run_batch_sort(
