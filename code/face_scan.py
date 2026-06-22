@@ -13,6 +13,7 @@ import numpy as np
 from config import SCAN_WORKERS
 from embeddings import FaceFilterParams, encode_faces_from_path
 from group_photos import GroupPhotoMode
+from sort_runtime import SortCancelled
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ def scan_all_images(
         results: list[tuple[Path, list[tuple[int, int, np.ndarray]], Optional[str]]] = []
         for index, image_path in enumerate(image_paths, start=1):
             if should_cancel and should_cancel():
-                break
+                raise SortCancelled()
             if on_progress:
                 on_progress("scan", index, total, f"Scanning faces: {image_path.name}")
             encoding = encode_faces_from_path(image_path, encoding_mode, face_filter=filt)
@@ -116,7 +117,7 @@ def scan_all_images(
         for future in as_completed(futures):
             if should_cancel and should_cancel():
                 pool.shutdown(wait=False, cancel_futures=True)
-                break
+                raise SortCancelled()
             path_str, face_rows, error = future.result()
             raw[path_str] = (face_rows, error)
             completed += 1

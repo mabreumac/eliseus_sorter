@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+class SortCancelled(Exception):
+    """User cancelled before the sort finished writing output."""
+
+
 @dataclass
 class SortRuntime:
     scan_seconds: float = 0.0

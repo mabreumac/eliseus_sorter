@@ -11,7 +11,9 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from sort_runtime import SortRuntime
+from sort_runtime import SortCancelled, SortRuntime
+
+SORT_COMPLETE_MARKER = ".sort_complete"
 from class_registry import ClassRegistry
 from clustering import FaceClusterer, format_person_folder_label, person_id_label
 from config import (
@@ -123,12 +125,11 @@ def input_has_subfolders(input_dir: Path) -> bool:
 
 
 def resolve_sort_output_dir(input_dir: Path, output_dir: Path) -> Path:
-    """When input has subfolders, write into a timestamped run folder under output."""
+    """Write each run into a fresh timestamped folder under output."""
+    del input_dir  # kept for call-site compatibility
     base = output_dir.expanduser().resolve()
-    if input_has_subfolders(input_dir):
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return base / f"{stamp}{SORT_RUN_FOLDER_SUFFIX}"
-    return base
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return base / f"{stamp}{SORT_RUN_FOLDER_SUFFIX}"
 
 
 def discover_input_runs(input_dir: Path) -> list[tuple[str, Path]]:
@@ -136,6 +137,11 @@ def discover_input_runs(input_dir: Path) -> list[tuple[str, Path]]:
     if not input_dir.is_dir():
         raise ValueError(f"Input folder does not exist: {input_dir}")
     return [("", input_dir)]
+
+
+def _raise_if_cancelled(should_cancel: Optional[CancelCallback]) -> None:
+    if should_cancel and should_cancel():
+        raise SortCancelled()
 
 
 def _iter_images(config: SortConfig, effective_output: Path) -> list[Path]:
@@ -595,6 +601,7 @@ def _run_flat_sort(
         should_cancel=should_cancel,
     )
     runtime.scan_seconds = time.perf_counter() - t_scan
+    _raise_if_cancelled(should_cancel)
 
     clusterer = FaceClusterer(similarity_threshold=config.tolerance)
     cluster_assignments: dict[tuple[str, int], tuple[int, float]] = {}
@@ -610,6 +617,7 @@ def _run_flat_sort(
         cluster_index, similarity = clusterer.assign(face.embedding)
         cluster_assignments[key] = (cluster_index, similarity)
     runtime.cluster_seconds = time.perf_counter() - t_cluster
+    _raise_if_cancelled(should_cancel)
 
     rename_map = _resolve_person_renames(
         config,
@@ -646,6 +654,8 @@ def _run_flat_sort(
                 error=error,
             )
         )
+
+    _raise_if_cancelled(should_cancel)
 
     if not raw_results:
         runtime.copy_seconds = time.perf_counter() - t_copy
@@ -704,6 +714,7 @@ def _run_class_sort(
         should_cancel=should_cancel,
     )
     runtime.scan_seconds = time.perf_counter() - t_scan
+    _raise_if_cancelled(should_cancel)
 
     class_photos = [
         (path, faces)
@@ -774,6 +785,7 @@ def _run_class_sort(
         face_assignments[key] = (NO_CLASS_FOLDER, cluster_index, similarity)
 
     runtime.cluster_seconds = time.perf_counter() - t_cluster
+    _raise_if_cancelled(should_cancel)
 
     rename_map = _resolve_person_renames(
         config,
@@ -812,6 +824,8 @@ def _run_class_sort(
                 error=error,
             )
         )
+
+    _raise_if_cancelled(should_cancel)
 
     if not raw_results:
         runtime.copy_seconds = time.perf_counter() - t_copy
@@ -870,4 +884,9 @@ def run_batch_sort(
     """Sort all images under input as one pool into the resolved output folder."""
     effective_output = resolve_sort_output_dir(config.input_dir, config.output_dir)
     effective_config = replace(config, output_dir=effective_output)
-    return run_cluster_sort(effective_config, on_progress, should_cancel)
+    result = run_cluster_sort(effective_config, on_progress, should_cancel)
+    (effective_output / SORT_COMPLETE_MARKER).write_text(
+        datetime.now().isoformat(timespec="seconds"),
+        encoding="utf-8",
+    )
+    return result

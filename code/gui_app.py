@@ -40,6 +40,7 @@ from face_engine import (
 from group_photos import GroupPhotoSettings
 from reporting import format_result_line
 from resource_monitor import format_duration, format_memory, snapshot_process_tree
+from sort_runtime import SortCancelled
 from ui_locale import (
     DEFAULT_LANGUAGE,
     LANGUAGE_BY_CODE,
@@ -969,6 +970,8 @@ class EliseusSorterApp(ctk.CTk):
                 should_cancel=lambda: self._cancel_event.is_set(),
             )
             self._run_on_ui(self._finish, outcome)
+        except SortCancelled:
+            self._run_on_ui(self._finish_cancelled)
         except Exception as exc:  # noqa: BLE001
             self._run_on_ui(self._finish_error, str(exc))
         finally:
@@ -1031,6 +1034,17 @@ class EliseusSorterApp(ctk.CTk):
         )
         self.progress_panel.set_complete(message=finish_text)
         self._update_resources()
+
+    def _finish_cancelled(self) -> None:
+        loc = self._locale
+        self._append_log(loc.t("sort_cancelled"))
+        self._set_running(False)
+        self._sort_started_at = None
+        self.progress_panel.headline.configure(text=loc.t("sort_cancelled"))
+        self.progress_panel.percent_label.configure(text="")
+        self.progress_panel.step_caption.configure(text=loc.t("sort_cancelled_detail"))
+        self.progress_panel.detail_label.configure(text="")
+        self.resource_label.configure(text="")
 
     def _finish_error(self, message: str) -> None:
         loc = self._locale
