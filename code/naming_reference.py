@@ -15,7 +15,7 @@ from config import MATCH_TOLERANCE, NO_CLASS_FOLDER
 from embeddings import FaceFilterParams, cosine_similarity, encode_faces_from_path, normalize_embedding
 from face_scan import CancelCallback, ProgressCallback, effective_scan_workers, init_scan_worker
 from group_photos import GroupPhotoMode, is_group_reference_folder
-from image_utils import is_person_output_folder, iter_images_recursive
+from image_utils import iter_images_recursive
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +48,6 @@ def _centroid(embeddings: list[np.ndarray]) -> np.ndarray:
 
 def _is_reference_folder(name: str) -> bool:
     lowered = name.strip().casefold()
-    if is_person_output_folder(name):
-        return False
     if lowered.startswith("person_"):
         return False
     if lowered.startswith("class_"):
@@ -354,6 +352,41 @@ def _index_student_worker(
     )
 
 
+def _naming_index_error_message(
+    root: Path,
+    skip_levels: int,
+    index: NamingIndex,
+    *,
+    names_from_layout: int,
+    sample_layout_name: str | None,
+) -> str:
+    lines = [
+        f"No usable naming reference names under {root} (skip levels={skip_levels}).",
+        f"  Names from folder layout: {names_from_layout}",
+        f"  With a usable single-face photo: {len(index.references)}",
+        f"  Skipped (no single-face portrait): {index.skipped_empty_folders}",
+        f"  Photos with no face detected: {index.skipped_no_face}",
+        f"  Photos with multiple faces only: {index.skipped_multi_face}",
+    ]
+    if names_from_layout == 0:
+        lines.append(
+            "  Hint: skip levels may not match this folder. "
+            "Use 0 when each student's photos sit directly in a folder named after them "
+            "(ref/Name/photo.jpg). Use 1 when the name folder is one level above the "
+            "folder that holds the image (ref/Category/Name/photo.jpg)."
+        )
+    elif index.skipped_empty_folders >= names_from_layout:
+        lines.append(
+            "  Hint: names were found but every student lacked a single-face reference "
+            "photo (only group shots, or faces filtered by sensitivity). "
+            "Add one clear portrait per student or lower background face sensitivity."
+        )
+    if sample_layout_name:
+        lines.append(f"  Example name from layout: {sample_layout_name!r}")
+    lines.append("  Try adjusting Ref folder skip or the reference folder structure.")
+    return "\n".join(lines)
+
+
 def build_naming_index(
     root: Path,
     *,
@@ -378,6 +411,9 @@ def build_naming_index(
     warnings = duplicate_name_warnings(root, skip_levels)
     for message in warnings:
         logger.warning(message)
+
+    layout_groups = _group_images_by_student_name(root, skip_levels)
+    sample_name = next(iter(layout_groups), None)
 
     fingerprint = compute_reference_fingerprint(root)
     cached_payload = load_reference_cache_payload(
@@ -410,9 +446,13 @@ def build_naming_index(
 
     if not index.references:
         raise ValueError(
-            f"No usable naming reference names under {root} (skip levels={skip_levels}). "
-            "Expected student names by walking up from each photo's folder. "
-            "Try adjusting Ref folder skip."
+            _naming_index_error_message(
+                root,
+                skip_levels,
+                index,
+                names_from_layout=len(layout_groups),
+                sample_layout_name=sample_name,
+            )
         )
 
     save_reference_cache_payload(

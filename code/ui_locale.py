@@ -57,8 +57,8 @@ def _en() -> Locale:
             "folder_dialog_title": "Select folder",
             "label_ref_skip": "Ref folder skip",
             "hint_ref_skip": (
-                "Folder levels up from each photo to the identity label "
-                "(0 = folder that holds the image)"
+                "0 = student name is the folder that holds the photo (ref/Name/photo.jpg). "
+                "1 = walk up one more level (ref/Group/Name/photo.jpg → Group)"
             ),
             "label_group_faces": "Group if faces >",
             "hint_group_faces": (
@@ -176,8 +176,8 @@ def _pt() -> Locale:
             "folder_dialog_title": "Selecionar pasta",
             "label_ref_skip": "Saltar pastas ref.",
             "hint_ref_skip": (
-                "Níveis de pasta acima de cada foto até ao nome da identidade "
-                "(0 = pasta que contém a foto)"
+                "0 = nome do aluno é a pasta da foto (ref/Nome/foto.jpg). "
+                "1 = subir mais um nível (ref/Turma/Nome/foto.jpg → Turma)"
             ),
             "label_group_faces": "Grupo se rostos >",
             "hint_group_faces": (
