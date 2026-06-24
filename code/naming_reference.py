@@ -36,6 +36,7 @@ class NamingIndex:
     references: list[NamedReference] = field(default_factory=list)
     skipped_multi_face: int = 0
     skipped_no_face: int = 0
+    skipped_read_errors: int = 0
     skipped_empty_folders: int = 0
     duplicate_name_warnings: list[str] = field(default_factory=list)
     loaded_from_cache: bool = False
@@ -144,6 +145,7 @@ def _index_to_cache_payload(index: NamingIndex) -> dict[str, object]:
     return {
         "skipped_multi_face": index.skipped_multi_face,
         "skipped_no_face": index.skipped_no_face,
+        "skipped_read_errors": index.skipped_read_errors,
         "skipped_empty_folders": index.skipped_empty_folders,
         "duplicate_name_warnings": index.duplicate_name_warnings,
         "references": [
@@ -178,6 +180,7 @@ def _index_from_cache_payload(payload: dict[str, object]) -> NamingIndex:
         references=references,
         skipped_multi_face=int(payload.get("skipped_multi_face", 0)),
         skipped_no_face=int(payload.get("skipped_no_face", 0)),
+        skipped_read_errors=int(payload.get("skipped_read_errors", 0)),
         skipped_empty_folders=int(payload.get("skipped_empty_folders", 0)),
         duplicate_name_warnings=[str(w) for w in warnings_raw],
         loaded_from_cache=True,
@@ -188,10 +191,11 @@ def _first_single_face_in_images(
     image_paths: list[Path],
     *,
     face_filter: FaceFilterParams | None = None,
-) -> tuple[Optional[np.ndarray], Optional[Path], int, int]:
+) -> tuple[Optional[np.ndarray], Optional[Path], int, int, int]:
     """Use the first single-face photo in the list; return skip counts."""
     skipped_no_face = 0
     skipped_multi_face = 0
+    skipped_read_errors = 0
     for image_path in image_paths:
         encoded = encode_faces_from_path(
             image_path,
@@ -199,6 +203,8 @@ def _first_single_face_in_images(
             face_filter=face_filter,
         )
         if encoded.error:
+            if encoded.error.startswith("cannot read image"):
+                skipped_read_errors += 1
             continue
         if encoded.num_faces == 0:
             skipped_no_face += 1
@@ -207,8 +213,15 @@ def _first_single_face_in_images(
             skipped_multi_face += 1
             continue
         if encoded.faces:
-            return encoded.faces[0].embedding, image_path, skipped_no_face, skipped_multi_face
-    return None, None, skipped_no_face, skipped_multi_face
+            return (
+                encoded.faces[0].embedding,
+                image_path,
+                skipped_no_face,
+                skipped_multi_face,
+                skipped_read_errors,
+            )
+        skipped_no_face += 1
+    return None, None, skipped_no_face, skipped_multi_face, skipped_read_errors
 
 
 def _build_naming_index_fresh(
@@ -237,11 +250,12 @@ def _build_naming_index_fresh(
                     f"Indexing reference: {name}",
                 )
 
-            embedding, source_image, skipped_no_face, skipped_multi_face = (
+            embedding, source_image, skipped_no_face, skipped_multi_face, skipped_read_errors = (
                 _first_single_face_in_images(image_paths, face_filter=filt)
             )
             index.skipped_no_face += skipped_no_face
             index.skipped_multi_face += skipped_multi_face
+            index.skipped_read_errors += skipped_read_errors
             if embedding is None:
                 index.skipped_empty_folders += 1
                 logger.warning("No single-face reference photo for student name: %s", name)
@@ -274,7 +288,7 @@ def _build_naming_index_fresh(
                 )
             )
         completed = 0
-        results: dict[str, tuple[Optional[list[float]], Optional[str], Optional[str], int, int]] = {}
+        results: dict[str, tuple[Optional[list[float]], Optional[str], Optional[str], int, int, int]] = {}
 
         with ProcessPoolExecutor(
             max_workers=worker_count,
@@ -286,18 +300,26 @@ def _build_naming_index_fresh(
                 if should_cancel and should_cancel():
                     pool.shutdown(wait=False, cancel_futures=True)
                     break
-                name, embedding, source_image, name_folder_str, skipped_no_face, skipped_multi_face = (
-                    future.result()
-                )
+                (
+                    name,
+                    embedding,
+                    source_image,
+                    name_folder_str,
+                    skipped_no_face,
+                    skipped_multi_face,
+                    skipped_read_errors,
+                ) = future.result()
                 results[name] = (
                     embedding,
                     source_image,
                     name_folder_str,
                     skipped_no_face,
                     skipped_multi_face,
+                    skipped_read_errors,
                 )
                 index.skipped_no_face += skipped_no_face
                 index.skipped_multi_face += skipped_multi_face
+                index.skipped_read_errors += skipped_read_errors
                 completed += 1
                 if on_progress:
                     on_progress(
@@ -308,8 +330,8 @@ def _build_naming_index_fresh(
                     )
 
         for name in image_groups:
-            embedding, source_image, name_folder_str, _, _ = results.get(
-                name, (None, None, None, 0, 0)
+            embedding, source_image, name_folder_str, _, _, _ = results.get(
+                name, (None, None, None, 0, 0, 0)
             )
             if embedding is None:
                 index.skipped_empty_folders += 1
@@ -331,17 +353,19 @@ def _build_naming_index_fresh(
 
 def _index_student_worker(
     args: tuple[str, list[str], str, float, float],
-) -> tuple[str, Optional[list[float]], Optional[str], Optional[str], int, int]:
+) -> tuple[str, Optional[list[float]], Optional[str], Optional[str], int, int, int]:
     """Find the first single-face reference photo for one student name."""
     name, image_strs, name_folder_str, min_det_score, min_area_ratio = args
     face_filter = FaceFilterParams(min_det_score=min_det_score, min_area_ratio=min_area_ratio)
     image_paths = [Path(path) for path in image_strs]
-    embedding, source_image, skipped_no_face, skipped_multi_face = _first_single_face_in_images(
+    embedding, source_image, skipped_no_face, skipped_multi_face, skipped_read_errors = (
+        _first_single_face_in_images(
         image_paths,
         face_filter=face_filter,
+        )
     )
     if embedding is None:
-        return name, None, None, name_folder_str, skipped_no_face, skipped_multi_face
+        return name, None, None, name_folder_str, skipped_no_face, skipped_multi_face, skipped_read_errors
     return (
         name,
         embedding.astype(float).tolist(),
@@ -349,6 +373,7 @@ def _index_student_worker(
         name_folder_str,
         skipped_no_face,
         skipped_multi_face,
+        skipped_read_errors,
     )
 
 
@@ -367,6 +392,7 @@ def _naming_index_error_message(
         f"  Skipped (no single-face portrait): {index.skipped_empty_folders}",
         f"  Photos with no face detected: {index.skipped_no_face}",
         f"  Photos with multiple faces only: {index.skipped_multi_face}",
+        f"  Photos that could not be read: {index.skipped_read_errors}",
     ]
     if names_from_layout == 0:
         lines.append(
@@ -376,11 +402,19 @@ def _naming_index_error_message(
             "folder that holds the image (ref/Category/Name/photo.jpg)."
         )
     elif index.skipped_empty_folders >= names_from_layout:
-        lines.append(
-            "  Hint: names were found but every student lacked a single-face reference "
-            "photo (only group shots, or faces filtered by sensitivity). "
-            "Add one clear portrait per student or lower background face sensitivity."
-        )
+        if index.skipped_read_errors > 0 and index.skipped_no_face == 0 and index.skipped_multi_face == 0:
+            lines.append(
+                "  Hint: folder names were found but photos could not be opened for face detection. "
+                "This often happens on external drives or paths with accented characters "
+                "(e.g. março, sónia) when the image loader fails. Rebuild with the latest app "
+                "or copy the reference folder to a simple ASCII path and try again."
+            )
+        else:
+            lines.append(
+                "  Hint: names were found but every student lacked a single-face reference "
+                "photo (only group shots, or faces filtered by sensitivity). "
+                "Add one clear portrait per student or lower background face sensitivity."
+            )
     if sample_layout_name:
         lines.append(f"  Example name from layout: {sample_layout_name!r}")
     lines.append("  Try adjusting Ref folder skip or the reference folder structure.")

@@ -116,7 +116,14 @@ def _normalize(embedding: np.ndarray) -> np.ndarray:
 
 
 def _load_bgr(image_path: Path) -> np.ndarray | None:
-    image = cv2.imread(str(image_path))
+    """Load BGR array; imdecode avoids cv2.imread failures on non-ASCII paths."""
+    try:
+        raw = np.fromfile(image_path, dtype=np.uint8)
+    except OSError:
+        return None
+    if raw.size == 0:
+        return None
+    image = cv2.imdecode(raw, cv2.IMREAD_COLOR)
     if image is None:
         return None
     return image
