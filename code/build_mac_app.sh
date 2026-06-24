@@ -25,6 +25,7 @@ DEV_MODULES=(
   build_test_subset.py
   copy_data_from_drive.py
   build_reference.py
+  probe_reference_volume.py
   database.py
   build_mac_app.sh
   main.py

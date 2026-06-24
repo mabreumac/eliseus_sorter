@@ -17,6 +17,7 @@ from config import (
 )
 from face_engine import get_face_analysis
 from group_photos import GroupPhotoMode
+from image_utils import load_image_bgr
 
 
 @dataclass(frozen=True)
@@ -116,17 +117,7 @@ def _normalize(embedding: np.ndarray) -> np.ndarray:
 
 
 def _load_bgr(image_path: Path) -> np.ndarray | None:
-    """Load BGR array; imdecode avoids cv2.imread failures on non-ASCII paths."""
-    try:
-        raw = np.fromfile(image_path, dtype=np.uint8)
-    except OSError:
-        return None
-    if raw.size == 0:
-        return None
-    image = cv2.imdecode(raw, cv2.IMREAD_COLOR)
-    if image is None:
-        return None
-    return image
+    return load_image_bgr(image_path)
 
 
 def encode_faces_from_path(

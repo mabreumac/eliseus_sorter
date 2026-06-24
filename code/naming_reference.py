@@ -15,7 +15,7 @@ from config import MATCH_TOLERANCE, NO_CLASS_FOLDER
 from embeddings import FaceFilterParams, cosine_similarity, encode_faces_from_path, normalize_embedding
 from face_scan import CancelCallback, ProgressCallback, effective_scan_workers, init_scan_worker
 from group_photos import GroupPhotoMode, is_group_reference_folder
-from image_utils import iter_images_recursive
+from image_utils import describe_image_read_probe, iter_images_recursive
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +220,6 @@ def _first_single_face_in_images(
                 skipped_multi_face,
                 skipped_read_errors,
             )
-        skipped_no_face += 1
     return None, None, skipped_no_face, skipped_multi_face, skipped_read_errors
 
 
@@ -360,8 +359,8 @@ def _index_student_worker(
     image_paths = [Path(path) for path in image_strs]
     embedding, source_image, skipped_no_face, skipped_multi_face, skipped_read_errors = (
         _first_single_face_in_images(
-        image_paths,
-        face_filter=face_filter,
+            image_paths,
+            face_filter=face_filter,
         )
     )
     if embedding is None:
@@ -404,11 +403,13 @@ def _naming_index_error_message(
     elif index.skipped_empty_folders >= names_from_layout:
         if index.skipped_read_errors > 0 and index.skipped_no_face == 0 and index.skipped_multi_face == 0:
             lines.append(
-                "  Hint: folder names were found but photos could not be opened for face detection. "
-                "This often happens on external drives or paths with accented characters "
-                "(e.g. março, sónia) when the image loader fails. Rebuild with the latest app "
-                "or copy the reference folder to a simple ASCII path and try again."
+                "  Hint: photos could not be opened or decoded. On external drives macOS often "
+                "creates AppleDouble sidecar files (names like ._JDM63729.jpg) that are not real "
+                "photos — rebuild with the latest app (these are now skipped)."
             )
+            sample_image = next(iter_images_recursive(root), None)
+            if sample_image is not None:
+                lines.append(f"  Probe: {describe_image_read_probe(sample_image)}")
         else:
             lines.append(
                 "  Hint: names were found but every student lacked a single-face reference "
